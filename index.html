@@ -45,6 +45,10 @@
         <span aria-hidden="true">📚</span> My Stories
       </button>
 
+      <button id="btn-see-blog" class="nav-btn btn-blog" type="button" title="See what my blog looks like">
+        <span aria-hidden="true">🌟</span> See My Blog
+      </button>
+
       <button id="btn-save" class="nav-btn btn-save-big" type="button" title="Save your work">
         <span aria-hidden="true">💾</span> Save!
       </button>
@@ -318,20 +322,21 @@
           </div>
         </section>
 
-        <!-- Static Blog Generator Section -->
-        <section class="admin-section">
-          <h3>🌐 Static Blog Site Publisher</h3>
-          <p>Generate a private, self-contained HTML site containing her published posts.</p>
-          <label class="checkbox-label">
-            <input type="checkbox" id="chk-include-audio" checked>
-            Include voice recordings on the blog
-          </label>
+        <!-- One-Click Publish Section -->
+        <section class="admin-section" aria-labelledby="heading-publish">
+          <h3 id="heading-publish">🌐 Publish Family Blog</h3>
+          <p>Build the private, self-contained website containing published stories for all kids.</p>
           <div class="admin-buttons-row">
-            <button id="btn-generate-site" class="admin-btn btn-publish" type="button">
-              Make Blog Site Files
+            <button id="btn-publish-site" class="admin-btn btn-publish-prominent" type="button">
+              🚀 Publish Family Site
+            </button>
+            <button id="btn-generate-site-zip" class="admin-btn btn-secondary" type="button">
+              Download Site as .ZIP
             </button>
           </div>
-          <p id="publish-status-msg" class="admin-status-text"></p>
+          <div id="publish-result-box" class="publish-result-box hidden" role="status">
+            <!-- Rendered by app.js with published counts and folder location -->
+          </div>
         </section>
 
         <!-- Post Publishing Manager -->
@@ -404,6 +409,26 @@
           <button type="submit" class="nav-btn btn-save-big">Save Profile &amp; Start Writing!</button>
         </div>
       </form>
+    </div>
+  </dialog>
+
+  <!-- "See My Blog" Kid Read-Only View Dialog -->
+  <dialog id="kid-blog-dialog" class="kid-dialog fullscreen-dialog" aria-labelledby="kid-blog-title">
+    <div class="kid-blog-container">
+      <div class="kid-blog-header">
+        <button type="button" id="btn-close-kid-blog" class="nav-btn btn-fun btn-back-big" aria-label="Return to writing desk">
+          ← Back to Desk
+        </button>
+        <div class="kid-blog-title-area">
+          <h2 id="kid-blog-title" class="kid-blog-heading">
+            <!-- Injected by app.js: e.g. 🦄 Maya's Story Blog -->
+          </h2>
+          <p id="kid-blog-subtitle" class="kid-blog-sub"></p>
+        </div>
+      </div>
+      <div id="kid-blog-body" class="kid-blog-content" role="region" aria-label="Stories blog">
+        <!-- Rendered by app.js using shared templates -->
+      </div>
     </div>
   </dialog>
 

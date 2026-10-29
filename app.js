@@ -114,6 +114,7 @@ const STATE = {
   parentPasscode: 'dad', // Friendly gate word for dad
   profiles: [], // Array of { id, name, slug, emoji, color }
   activeProfileId: null, // Currently selected kid's profile ID
+  blogBlobUrls: [], // Object URLs to clean up when exiting "See My Blog" view
 };
 
 const PALETTE_COLORS = [
@@ -1682,47 +1683,53 @@ document.getElementById('btn-export-everything').addEventListener('click', async
   }
 
   const zipFiles = [];
-  for (const post of posts) {
-    const slug = sanitizeFolderName(post.title);
+  // Include profiles.json in backup
+  zipFiles.push({
+    path: 'profiles.json',
+    data: new TextEncoder().encode(JSON.stringify(STATE.profiles, null, 2))
+  });
 
-    // post.json
+  for (const post of posts) {
+    const prof = STATE.profiles.find(p => p.id === post.author);
+    const kidSlug = prof ? prof.slug : 'unassigned';
+    const slug = sanitizeFolderName(post.title);
+    const basePath = `Stories/${kidSlug}/${slug}`;
+
     const metaClone = { ...post };
     delete metaClone.dirHandle;
     delete metaClone.drawingUrl;
     delete metaClone.drawingBlob;
     delete metaClone.audios;
     zipFiles.push({
-      path: `${slug}/post.json`,
+      path: `${basePath}/post.json`,
       data: new TextEncoder().encode(JSON.stringify(metaClone, null, 2))
     });
 
-    // drawing.png
     if (post.dirHandle) {
       try {
         const drawHandle = await post.dirHandle.getFileHandle('drawing.png');
         const drawFile = await drawHandle.getFile();
         const buf = new Uint8Array(await drawFile.arrayBuffer());
-        zipFiles.push({ path: `${slug}/drawing.png`, data: buf });
+        zipFiles.push({ path: `${basePath}/drawing.png`, data: buf });
       } catch (_) {}
     } else if (post.drawingBlob) {
       const buf = new Uint8Array(await post.drawingBlob.arrayBuffer());
-      zipFiles.push({ path: `${slug}/drawing.png`, data: buf });
+      zipFiles.push({ path: `${basePath}/drawing.png`, data: buf });
     }
 
-    // Audio files
     if (post.dirHandle) {
       for (const aInfo of (post.audioFiles || [])) {
         try {
           const aHandle = await post.dirHandle.getFileHandle(aInfo.filename);
           const aFile = await aHandle.getFile();
           const buf = new Uint8Array(await aFile.arrayBuffer());
-          zipFiles.push({ path: `${slug}/${aInfo.filename}`, data: buf });
+          zipFiles.push({ path: `${basePath}/${aInfo.filename}`, data: buf });
         } catch (_) {}
       }
     } else if (post.audios) {
       for (const a of post.audios) {
         const buf = new Uint8Array(await a.blob.arrayBuffer());
-        zipFiles.push({ path: `${slug}/${a.filename}`, data: buf });
+        zipFiles.push({ path: `${basePath}/${a.filename}`, data: buf });
       }
     }
   }
@@ -1732,60 +1739,89 @@ document.getElementById('btn-export-everything').addEventListener('click', async
 });
 
 // ============================================================================
-// 12. Static Site Generator (Zero External Requests, Fully Self-Contained)
+// 13. Shared Site & Blog Generator Templates (Feature 2 & Feature 5)
 // ============================================================================
 
-document.getElementById('btn-generate-site').addEventListener('click', async () => {
-  const statusMsg = document.getElementById('publish-status-msg');
-  statusMsg.textContent = 'Generating blog site...';
-
-  const includeAudio = document.getElementById('chk-include-audio').checked;
-  const allPosts = await loadAllPostsFromDiskOrIDB();
-  const publishedPosts = allPosts.filter(p => p.isPublished);
-
-  if (publishedPosts.length === 0) {
-    statusMsg.textContent = 'None of the stories are marked as "Published" yet! Click "Mark as Published" above first.';
-    return;
-  }
-
-  publishedPosts.sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
-
-  const zipFiles = [];
-
-  // 1. Common blog style.css
-  const siteCss = `
+function getSharedSiteCss() {
+  return `
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: #FFF9ED;
       color: #2D3436;
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Comic Sans MS", sans-serif;
       line-height: 1.6;
       padding: 24px;
-      max-width: 900px;
+      max-width: 920px;
       margin: 0 auto;
     }
-    header { text-align: center; margin-bottom: 36px; padding-bottom: 20px; border-bottom: 3px solid #FFEAA7; }
+    header { text-align: center; margin-bottom: 36px; padding-bottom: 20px; border-bottom: 4px solid #FFEAA7; }
     h1 { color: #D63031; font-size: 2.4rem; margin-bottom: 8px; }
-    .site-desc { color: #636E72; font-size: 1.1rem; }
-    .post-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
-    .post-card { background: #FFFFFF; border-radius: 18px; border: 2px solid #EADDC7; overflow: hidden; display: flex; flex-direction: column; text-decoration: none; color: inherit; transition: transform 0.15s ease; }
-    .post-card:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0,0,0,0.06); }
-    .post-thumb { width: 100%; aspect-ratio: 800 / 550; object-fit: contain; background: #F8FAFC; border-bottom: 2px solid #F1F2F6; }
-    .post-info { padding: 16px; }
-    .post-title { font-size: 1.3rem; color: #2D3436; margin-bottom: 6px; }
-    .post-date { font-size: 0.9rem; color: #A0AEC0; }
+    .site-desc { color: #636E72; font-size: 1.15rem; }
+    .kids-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; margin-top: 24px; }
+    .kid-tile {
+      background: #FFFFFF;
+      border-radius: 24px;
+      border: 3px solid #EADDC7;
+      padding: 28px 20px;
+      text-align: center;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .kid-tile:hover { transform: translateY(-4px); box-shadow: 0 12px 28px rgba(0,0,0,0.08); }
+    .kid-tile-avatar { width: 72px; height: 72px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; margin-bottom: 4px; }
+    .kid-tile-name { font-size: 1.6rem; font-weight: 800; color: #2D3436; }
+    .kid-tile-count { font-size: 1rem; color: #636E72; font-weight: 600; }
+    .post-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 24px; margin-top: 24px; }
+    .post-card {
+      background: #FFFFFF;
+      border-radius: 20px;
+      border: 3px solid #EADDC7;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .post-card:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0,0,0,0.08); }
+    .post-thumb { width: 100%; aspect-ratio: 800 / 550; object-fit: contain; background: #FAFBFD; border-bottom: 2px solid #F1F2F6; }
+    .post-info { padding: 18px; }
+    .post-title { font-size: 1.35rem; color: #2D3436; margin-bottom: 6px; font-weight: 800; }
+    .post-date { font-size: 0.95rem; color: #A0AEC0; font-weight: 600; }
     .single-post { background: #FFFFFF; border-radius: 24px; border: 3px solid #EADDC7; padding: 32px; box-shadow: 0 8px 30px rgba(0,0,0,0.05); }
-    .back-link { display: inline-block; margin-bottom: 20px; text-decoration: none; font-weight: 700; color: #0984E3; }
-    .story-hero-img { width: 100%; max-height: 550px; object-fit: contain; border-radius: 16px; background: #FAFBFD; border: 2px solid #EDF2F7; margin: 20px 0; }
-    .story-body { font-size: 1.35rem; line-height: 1.8; white-space: pre-wrap; margin: 24px 0; }
-    .audio-section { background: #FFF4E5; border: 2px solid #FFE0B2; border-radius: 16px; padding: 18px; margin-top: 24px; }
-    .audio-player-row { margin-top: 10px; display: flex; align-items: center; gap: 12px; }
+    .back-link { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 22px; text-decoration: none; font-weight: 800; color: #0984E3; font-size: 1.1rem; }
+    .story-hero-img { width: 100%; max-height: 540px; object-fit: contain; border-radius: 16px; background: #FAFBFD; border: 2px solid #EDF2F7; margin: 20px 0; }
+    .story-body { font-size: 1.35rem; line-height: 1.8; white-space: pre-wrap; margin: 24px 0; color: #2D3436; }
+    .audio-section { background: #FFF4E5; border: 2px solid #FFE0B2; border-radius: 16px; padding: 20px; margin-top: 24px; }
+    .audio-player-row { margin-top: 12px; display: flex; align-items: center; gap: 12px; }
     audio { width: 100%; height: 44px; }
   `;
-  zipFiles.push({ path: 'style.css', data: new TextEncoder().encode(siteCss) });
+}
 
-  // 2. Main blog index.html
-  let indexHtml = `<!DOCTYPE html>
+function buildRobotsTxt() {
+  return `User-agent: *\nDisallow: /\n`;
+}
+
+function renderFamilyLandingHtml(kidsData) {
+  let tilesHtml = '';
+  kidsData.forEach(kid => {
+    tilesHtml += `
+    <a href="./${escapeHtml(kid.slug)}/index.html" class="kid-tile">
+      <div class="kid-tile-avatar" style="background-color: ${escapeHtml(kid.color || '#FD79A8')};">
+        ${escapeHtml(kid.emoji || '⭐')}
+      </div>
+      <h2 class="kid-tile-name">${escapeHtml(kid.name)}</h2>
+      <span class="kid-tile-count">${kid.publishedCount} published ${kid.publishedCount === 1 ? 'story' : 'stories'}</span>
+    </a>
+`;
+  });
+
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -1796,130 +1832,591 @@ document.getElementById('btn-generate-site').addEventListener('click', async () 
 </head>
 <body>
   <header>
-    <h1>✨ Our Story Desk ✨</h1>
-    <p class="site-desc">A private collection of adventures, drawings, and stories.</p>
+    <h1>✨ Our Family Story Desk ✨</h1>
+    <p class="site-desc">A private collection of drawings, adventures, and narrations.</p>
   </header>
-  <main class="post-grid">
+  <main>
+    <div class="kids-grid">
+      ${tilesHtml}
+    </div>
+  </main>
+</body>
+</html>
 `;
+}
 
-  for (const post of publishedPosts) {
-    const slug = sanitizeFolderName(post.title);
-    const dateFormatted = new Date(post.created).toLocaleDateString(undefined, {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
+function renderKidStoriesGridHtml(profile, stories, isLiveSite = true) {
+  const kidName = escapeHtml(profile ? profile.name : 'Stories');
+  const kidEmoji = escapeHtml(profile ? (profile.emoji || '⭐') : '📚');
+  const backHref = isLiveSite ? '../index.html' : '#';
+
+  let cardsHtml = '';
+  if (stories.length === 0) {
+    cardsHtml = `<p style="grid-column: 1 / -1; text-align: center; color: #636E72; font-size: 1.2rem; padding: 40px 0;">No published stories yet! Stories marked as "Published" in Story Desk will appear here.</p>`;
+  } else {
+    stories.forEach((story, idx) => {
+      const slug = sanitizeFolderName(story.title);
+      const dateFormatted = new Date(story.created).toLocaleDateString(undefined, {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      const cardHref = isLiveSite ? `./${slug}/index.html` : `#story-${idx}`;
+      const imgSrc = isLiveSite ? `./${slug}/drawing.png` : (story.drawingUrl || '');
+
+      cardsHtml += `
+      <a href="${cardHref}" class="post-card" data-story-idx="${idx}">
+        <img src="${imgSrc}" alt="Drawing for ${escapeHtml(story.title)}" class="post-thumb" loading="lazy">
+        <div class="post-info">
+          <h2 class="post-title">${escapeHtml(story.title)}</h2>
+          <div class="post-date">${dateFormatted}</div>
+        </div>
+      </a>
+`;
     });
+  }
 
-    indexHtml += `
-    <a href="./${slug}/index.html" class="post-card">
-      <img src="./${slug}/drawing.png" alt="Drawing for ${escapeHtml(post.title)}" class="post-thumb" loading="lazy">
-      <div class="post-info">
-        <h2 class="post-title">${escapeHtml(post.title)}</h2>
-        <div class="post-date">${dateFormatted}</div>
-      </div>
-    </a>
-`;
-
-    // 3. Build Post Page
-    let postPageHtml = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
-  <title>${escapeHtml(post.title)} - Story Desk</title>
-  <link rel="stylesheet" href="../style.css">
+  <title>${kidName}'s Stories - Story Desk</title>
+  <link rel="stylesheet" href="${isLiveSite ? '../style.css' : './style.css'}">
 </head>
 <body>
-  <a href="../index.html" class="back-link">← Back to All Stories</a>
-  <article class="single-post">
-    <h1>${escapeHtml(post.title)}</h1>
-    <p class="post-date">${dateFormatted}</p>
-    <img src="./drawing.png" alt="Drawing for ${escapeHtml(post.title)}" class="story-hero-img">
-    <div class="story-body">${escapeHtml(post.storyText || '')}</div>
+  <header>
+    <a href="${backHref}" class="back-link" id="link-back-family">← Family Story Desk</a>
+    <h1>${kidEmoji} ${kidName}'s Stories ${kidEmoji}</h1>
+    <p class="site-desc">Explore drawings, stories, and voice recordings!</p>
+  </header>
+  <main class="post-grid" id="kid-stories-grid">
+    ${cardsHtml}
+  </main>
+</body>
+</html>
 `;
+}
 
-    if (includeAudio) {
-      let audioListHtml = '';
-      const audioFiles = post.audioFiles || (post.audios ? post.audios.map(a => ({ filename: a.filename, duration: a.duration })) : []);
+function renderStoryDetailPageHtml(story, profile, isLiveSite = true, includeAudio = true) {
+  const kidName = escapeHtml(profile ? profile.name : 'Stories');
+  const backHref = isLiveSite ? '../index.html' : '#back-to-kid';
+  const dateFormatted = new Date(story.created).toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+  const imgSrc = isLiveSite ? './drawing.png' : (story.drawingUrl || '');
 
-      audioFiles.forEach((af, idx) => {
-        audioListHtml += `
+  let audioSectionHtml = '';
+  if (includeAudio) {
+    let audioRowsHtml = '';
+    const audioFiles = story.audioFiles || (story.audios ? story.audios.map(a => ({ filename: a.filename, duration: a.duration, url: a.url })) : []);
+
+    audioFiles.forEach((af, idx) => {
+      const audioSrc = isLiveSite ? `./${af.filename}` : (af.url || '');
+      audioRowsHtml += `
       <div class="audio-player-row">
-        <span>Take ${idx + 1}:</span>
-        <audio controls src="./${af.filename}" preload="metadata"></audio>
+        <strong>Take ${idx + 1}:</strong>
+        <audio controls src="${audioSrc}" preload="metadata"></audio>
       </div>
 `;
-      });
+    });
 
-      if (audioListHtml) {
-        postPageHtml += `
-    <section class="audio-section">
-      <h3>🎙️ Voice Recordings</h3>
-      ${audioListHtml}
-    </section>
+    if (audioRowsHtml) {
+      audioSectionHtml = `
+      <section class="audio-section">
+        <h3>🎙️ Voice Recordings</h3>
+        ${audioRowsHtml}
+      </section>
 `;
-      }
     }
+  }
 
-    postPageHtml += `
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>${escapeHtml(story.title)} - ${kidName}'s Story Desk</title>
+  <link rel="stylesheet" href="${isLiveSite ? '../../style.css' : './style.css'}">
+</head>
+<body>
+  <a href="${backHref}" class="back-link" id="link-back-kid">← Back to ${kidName}'s Stories</a>
+  <article class="single-post">
+    <h1>${escapeHtml(story.title)}</h1>
+    <p class="post-date">${dateFormatted}</p>
+    <img src="${imgSrc}" alt="Drawing for ${escapeHtml(story.title)}" class="story-hero-img">
+    <div class="story-body">${escapeHtml(story.storyText || '')}</div>
+    ${audioSectionHtml}
   </article>
 </body>
 </html>
 `;
+}
 
+// ============================================================================
+// 14. Feature 2: One-Click Publish (File System site/ & ZIP Fallback)
+// ============================================================================
+
+document.getElementById('btn-publish-site')?.addEventListener('click', () => publishFamilySite(false));
+document.getElementById('btn-generate-site-zip')?.addEventListener('click', () => publishFamilySite(true));
+
+async function publishFamilySite(forceZip = false) {
+  const resultBox = document.getElementById('publish-result-box');
+  if (resultBox) {
+    resultBox.className = 'publish-result-box';
+    resultBox.classList.remove('hidden');
+    resultBox.innerHTML = '<p>Publishing family site...</p>';
+  }
+
+  const allPosts = await loadAllPostsFromDiskOrIDB();
+  const publishedPosts = allPosts.filter(p => p.isPublished);
+
+  if (publishedPosts.length === 0) {
+    if (resultBox) {
+      resultBox.className = 'publish-result-box error';
+      resultBox.innerHTML = '<p>⚠️ No stories are marked as "Published" yet! Use the review table below to mark stories as Published first.</p>';
+    }
+    return;
+  }
+
+  // Group stories by kid
+  const kidsWithStories = [];
+  const publishedCountByKid = {};
+
+  for (const prof of STATE.profiles) {
+    const kidStories = publishedPosts.filter(p => p.author === prof.id);
+    kidStories.sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+    kidsWithStories.push({
+      ...prof,
+      publishedCount: kidStories.length,
+      stories: kidStories
+    });
+    publishedCountByKid[prof.name] = kidStories.length;
+  }
+
+  // Handle unassigned published stories if any
+  const unassignedStories = publishedPosts.filter(p => !p.author || !STATE.profiles.some(prof => prof.id === p.author));
+  if (unassignedStories.length > 0) {
+    unassignedStories.sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+    kidsWithStories.push({
+      id: 'unassigned',
+      name: 'Family Friends',
+      slug: 'stories',
+      emoji: '🌟',
+      color: '#FDCB6E',
+      publishedCount: unassignedStories.length,
+      stories: unassignedStories
+    });
+    publishedCountByKid['Family Friends'] = unassignedStories.length;
+  }
+
+  const dirHandle = await getStoredDirectoryHandle();
+
+  // Mode A: File System Access (Write to site/ subfolder)
+  if (dirHandle && 'showDirectoryPicker' in window && !forceZip) {
+    try {
+      const hasPerm = await verifyPermission(dirHandle, true);
+      if (!hasPerm) throw new Error('Permission denied');
+
+      const siteDir = await dirHandle.getDirectoryHandle('site', { create: true });
+
+      // 1. site/robots.txt
+      const robotsH = await siteDir.getFileHandle('robots.txt', { create: true });
+      const robotsW = await robotsH.createWritable();
+      await robotsW.write(buildRobotsTxt());
+      await robotsW.close();
+
+      // 2. site/style.css
+      const cssH = await siteDir.getFileHandle('style.css', { create: true });
+      const cssW = await cssH.createWritable();
+      await cssW.write(getSharedSiteCss());
+      await cssW.close();
+
+      // 3. site/index.html (Family landing page)
+      const indexH = await siteDir.getFileHandle('index.html', { create: true });
+      const indexW = await indexH.createWritable();
+      await indexW.write(renderFamilyLandingHtml(kidsWithStories));
+      await indexW.close();
+
+      // 4. For each kid, build site/<kid-slug>/
+      for (const kid of kidsWithStories) {
+        const kidDir = await siteDir.getDirectoryHandle(kid.slug, { create: true });
+
+        // site/<kid-slug>/index.html
+        const kidIndexH = await kidDir.getFileHandle('index.html', { create: true });
+        const kidIndexW = await kidIndexH.createWritable();
+        await kidIndexW.write(renderKidStoriesGridHtml(kid, kid.stories, true));
+        await kidIndexW.close();
+
+        // Each story
+        for (const story of kid.stories) {
+          const storySlug = sanitizeFolderName(story.title);
+          const storyDir = await kidDir.getDirectoryHandle(storySlug, { create: true });
+
+          // site/<kid-slug>/<story-slug>/index.html
+          const storyHtmlH = await storyDir.getFileHandle('index.html', { create: true });
+          const storyHtmlW = await storyHtmlH.createWritable();
+          await storyHtmlW.write(renderStoryDetailPageHtml(story, kid, true, true));
+          await storyHtmlW.close();
+
+          // drawing.png
+          if (story.dirHandle) {
+            try {
+              const srcDrawH = await story.dirHandle.getFileHandle('drawing.png');
+              const srcDrawF = await srcDrawH.getFile();
+              const destDrawH = await storyDir.getFileHandle('drawing.png', { create: true });
+              const destDrawW = await destDrawH.createWritable();
+              await destDrawW.write(srcDrawF);
+              await destDrawW.close();
+            } catch (_) {}
+          } else if (story.drawingBlob) {
+            const destDrawH = await storyDir.getFileHandle('drawing.png', { create: true });
+            const destDrawW = await destDrawH.createWritable();
+            await destDrawW.write(story.drawingBlob);
+            await destDrawW.close();
+          }
+
+          // Audio files
+          if (story.dirHandle) {
+            for (const aInfo of (story.audioFiles || [])) {
+              try {
+                const srcAudioH = await story.dirHandle.getFileHandle(aInfo.filename);
+                const srcAudioF = await srcAudioH.getFile();
+                const destAudioH = await storyDir.getFileHandle(aInfo.filename, { create: true });
+                const destAudioW = await destAudioH.createWritable();
+                await destAudioW.write(srcAudioF);
+                await destAudioW.close();
+              } catch (_) {}
+            }
+          } else if (story.audios) {
+            for (const a of story.audios) {
+              const destAudioH = await storyDir.getFileHandle(a.filename, { create: true });
+              const destAudioW = await destAudioH.createWritable();
+              await destAudioW.write(a.blob);
+              await destAudioW.close();
+            }
+          }
+        }
+      }
+
+      // Success breakdown
+      let breakdownHtml = '<ul>';
+      for (const [name, count] of Object.entries(publishedCountByKid)) {
+        breakdownHtml += `<li><strong>${escapeHtml(name)}:</strong> ${count} published ${count === 1 ? 'story' : 'stories'}</li>`;
+      }
+      breakdownHtml += '</ul>';
+
+      if (resultBox) {
+        resultBox.innerHTML = `
+          <p>🎉 <strong>Family Site Published Successfully!</strong></p>
+          <p>Generated static site directly in your local <code>site/</code> folder:</p>
+          <p><strong>Path:</strong> <code>${escapeHtml(dirHandle.name)}/site/</code></p>
+          ${breakdownHtml}
+          <p>Ready to deploy via <code>deploy/deploy.sh</code> or Cloudflare Pages!</p>
+        `;
+      }
+      showAlert(`Published ${publishedPosts.length} stories into ${dirHandle.name}/site/!`, '🚀');
+      return;
+    } catch (err) {
+      console.warn('File System site publish failed, falling back to ZIP:', err);
+    }
+  }
+
+  // Mode B: Fallback to ZIP download
+  const zipFiles = [];
+  zipFiles.push({ path: 'robots.txt', data: new TextEncoder().encode(buildRobotsTxt()) });
+  zipFiles.push({ path: 'style.css', data: new TextEncoder().encode(getSharedSiteCss()) });
+  zipFiles.push({ path: 'index.html', data: new TextEncoder().encode(renderFamilyLandingHtml(kidsWithStories)) });
+
+  for (const kid of kidsWithStories) {
     zipFiles.push({
-      path: `${slug}/index.html`,
-      data: new TextEncoder().encode(postPageHtml)
+      path: `${kid.slug}/index.html`,
+      data: new TextEncoder().encode(renderKidStoriesGridHtml(kid, kid.stories, true))
     });
 
-    // Drawing file
-    if (post.dirHandle) {
-      try {
-        const drawH = await post.dirHandle.getFileHandle('drawing.png');
-        const drawF = await drawH.getFile();
-        const buf = new Uint8Array(await drawF.arrayBuffer());
-        zipFiles.push({ path: `${slug}/drawing.png`, data: buf });
-      } catch (_) {}
-    } else if (post.drawingBlob) {
-      const buf = new Uint8Array(await post.drawingBlob.arrayBuffer());
-      zipFiles.push({ path: `${slug}/drawing.png`, data: buf });
-    }
+    for (const story of kid.stories) {
+      const storySlug = sanitizeFolderName(story.title);
+      const basePath = `${kid.slug}/${storySlug}`;
 
-    // Audio files
-    if (includeAudio) {
-      if (post.dirHandle) {
-        for (const aInfo of (post.audioFiles || [])) {
+      zipFiles.push({
+        path: `${basePath}/index.html`,
+        data: new TextEncoder().encode(renderStoryDetailPageHtml(story, kid, true, true))
+      });
+
+      if (story.dirHandle) {
+        try {
+          const drawH = await story.dirHandle.getFileHandle('drawing.png');
+          const drawF = await drawH.getFile();
+          zipFiles.push({ path: `${basePath}/drawing.png`, data: new Uint8Array(await drawF.arrayBuffer()) });
+        } catch (_) {}
+      } else if (story.drawingBlob) {
+        zipFiles.push({ path: `${basePath}/drawing.png`, data: new Uint8Array(await story.drawingBlob.arrayBuffer()) });
+      }
+
+      if (story.dirHandle) {
+        for (const aInfo of (story.audioFiles || [])) {
           try {
-            const aHandle = await post.dirHandle.getFileHandle(aInfo.filename);
+            const aHandle = await story.dirHandle.getFileHandle(aInfo.filename);
             const aFile = await aHandle.getFile();
-            const buf = new Uint8Array(await aFile.arrayBuffer());
-            zipFiles.push({ path: `${slug}/${aInfo.filename}`, data: buf });
+            zipFiles.push({ path: `${basePath}/${aInfo.filename}`, data: new Uint8Array(await aFile.arrayBuffer()) });
           } catch (_) {}
         }
-      } else if (post.audios) {
-        for (const a of post.audios) {
-          const buf = new Uint8Array(await a.blob.arrayBuffer());
-          zipFiles.push({ path: `${slug}/${a.filename}`, data: buf });
+      } else if (story.audios) {
+        for (const a of story.audios) {
+          zipFiles.push({ path: `${basePath}/${a.filename}`, data: new Uint8Array(await a.blob.arrayBuffer()) });
         }
       }
     }
   }
 
-  indexHtml += `
-  </main>
-</body>
-</html>
-`;
+  const zipBlob = buildZipFile(zipFiles);
+  triggerDownload(zipBlob, `story-desk-site-${new Date().toISOString().split('T')[0]}.zip`);
 
-  zipFiles.push({ path: 'index.html', data: new TextEncoder().encode(indexHtml) });
+  let breakdownHtml = '<ul>';
+  for (const [name, count] of Object.entries(publishedCountByKid)) {
+    breakdownHtml += `<li><strong>${escapeHtml(name)}:</strong> ${count} published ${count === 1 ? 'story' : 'stories'}</li>`;
+  }
+  breakdownHtml += '</ul>';
 
-  // Generate ZIP of the site
-  const siteZip = buildZipFile(zipFiles);
-  triggerDownload(siteZip, `story-blog-site-${new Date().toISOString().split('T')[0]}.zip`);
+  if (resultBox) {
+    resultBox.innerHTML = `
+      <p>📦 <strong>Site Bundle Downloaded (.ZIP)!</strong></p>
+      ${breakdownHtml}
+      <p>Extract this ZIP file and deploy to Cloudflare Pages.</p>
+    `;
+  }
+}
 
-  statusMsg.textContent = `Generated site bundle with ${publishedPosts.length} published story(ies)! ZIP downloaded. Ready for Cloudflare Pages drag & drop.`;
-});
+// ============================================================================
+// 15. Feature 5: "See My Blog" Kid Read-Only In-App View
+// ============================================================================
+
+const btnSeeBlog = document.getElementById('btn-see-blog');
+const kidBlogDialog = document.getElementById('kid-blog-dialog');
+const btnCloseKidBlog = document.getElementById('btn-close-kid-blog');
+const kidBlogTitle = document.getElementById('kid-blog-title');
+const kidBlogSubtitle = document.getElementById('kid-blog-subtitle');
+const kidBlogBody = document.getElementById('kid-blog-body');
+
+btnSeeBlog?.addEventListener('click', openKidBlogView);
+btnCloseKidBlog?.addEventListener('click', closeKidBlogView);
+
+function revokeBlogUrls() {
+  STATE.blogBlobUrls.forEach(url => URL.revokeObjectURL(url));
+  STATE.blogBlobUrls = [];
+}
+
+async function openKidBlogView() {
+  revokeBlogUrls();
+  const activeKid = STATE.profiles.find(p => p.id === STATE.activeProfileId);
+  const kidName = activeKid ? activeKid.name : 'My';
+  const kidEmoji = activeKid ? (activeKid.emoji || '⭐') : '⭐';
+
+  if (kidBlogTitle) kidBlogTitle.textContent = `${kidEmoji} ${kidName}'s Story Blog ${kidEmoji}`;
+  if (kidBlogSubtitle) kidBlogSubtitle.textContent = 'Here is how your stories look to family and friends!';
+  if (kidBlogBody) kidBlogBody.innerHTML = '<p>Loading your published stories...</p>';
+  if (kidBlogDialog) kidBlogDialog.showModal();
+
+  const allPosts = await loadAllPostsFromDiskOrIDB();
+  // Filter for active profile's published stories
+  const publishedStories = allPosts.filter(p => {
+    if (!p.isPublished) return false;
+    if (!STATE.activeProfileId) return true;
+    if (p.author === STATE.activeProfileId) return true;
+    if (!p.author && STATE.profiles.length <= 1) return true;
+    return false;
+  });
+
+  publishedStories.sort((a, b) => new Date(b.created || 0) - new Date(a.created || 0));
+
+  // Prepare Blob URLs for drawings and audios
+  for (const story of publishedStories) {
+    if (story.dirHandle) {
+      try {
+        const drawH = await story.dirHandle.getFileHandle('drawing.png');
+        const drawF = await drawH.getFile();
+        const drawUrl = URL.createObjectURL(drawF);
+        STATE.blogBlobUrls.push(drawUrl);
+        story.drawingUrl = drawUrl;
+      } catch (_) {}
+
+      story.audios = [];
+      for (const aInfo of (story.audioFiles || [])) {
+        try {
+          const aHandle = await story.dirHandle.getFileHandle(aInfo.filename);
+          const aFile = await aHandle.getFile();
+          const aUrl = URL.createObjectURL(aFile);
+          STATE.blogBlobUrls.push(aUrl);
+          story.audios.push({
+            filename: aInfo.filename,
+            duration: aInfo.duration,
+            url: aUrl
+          });
+        } catch (_) {}
+      }
+    } else if (story.drawingBlob) {
+      const drawUrl = URL.createObjectURL(story.drawingBlob);
+      STATE.blogBlobUrls.push(drawUrl);
+      story.drawingUrl = drawUrl;
+
+      if (story.audios && Array.isArray(story.audios)) {
+        story.audios.forEach(a => {
+          if (a.blob) {
+            const aUrl = URL.createObjectURL(a.blob);
+            STATE.blogBlobUrls.push(aUrl);
+            a.url = aUrl;
+          }
+        });
+      }
+    }
+  }
+
+  renderKidBlogGrid(publishedStories, activeKid);
+}
+
+function renderKidBlogGrid(stories, activeKid) {
+  if (!kidBlogBody) return;
+  kidBlogBody.innerHTML = '';
+
+  if (stories.length === 0) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.style.textAlign = 'center';
+    emptyMsg.style.padding = '40px 20px';
+    emptyMsg.innerHTML = `
+      <p style="font-size: 1.4rem; color: #2D3436; font-weight: 700; margin-bottom: 12px;">No published stories yet!</p>
+      <p style="font-size: 1.1rem; color: #636E72;">Ask Dad to click <strong>🔒 Dad</strong> and mark your stories as <strong>Published</strong> to see them here.</p>
+    `;
+    kidBlogBody.appendChild(emptyMsg);
+    return;
+  }
+
+  const grid = document.createElement('div');
+  grid.className = 'blog-post-grid';
+
+  stories.forEach((story) => {
+    const card = document.createElement('article');
+    card.className = 'blog-post-card';
+
+    const img = document.createElement('img');
+    img.className = 'blog-post-thumb';
+    img.alt = `Drawing for ${story.title}`;
+    img.src = story.drawingUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="%23eee"/></svg>';
+
+    const info = document.createElement('div');
+    info.className = 'blog-post-info';
+
+    const title = document.createElement('h3');
+    title.className = 'blog-post-title';
+    title.textContent = story.title || 'Untitled Story';
+
+    const date = document.createElement('div');
+    date.className = 'blog-post-date';
+    date.textContent = new Date(story.created).toLocaleDateString(undefined, {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+
+    info.appendChild(title);
+    info.appendChild(date);
+    card.appendChild(img);
+    card.appendChild(info);
+
+    card.addEventListener('click', () => {
+      renderKidBlogStoryDetail(story, stories, activeKid);
+    });
+
+    grid.appendChild(card);
+  });
+
+  kidBlogBody.appendChild(grid);
+}
+
+function renderKidBlogStoryDetail(story, allStories, activeKid) {
+  if (!kidBlogBody) return;
+  kidBlogBody.innerHTML = '';
+
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'blog-back-btn';
+  backBtn.innerHTML = '← Back to all stories';
+  backBtn.addEventListener('click', () => {
+    renderKidBlogGrid(allStories, activeKid);
+  });
+
+  const article = document.createElement('article');
+  article.className = 'blog-single-post';
+
+  const title = document.createElement('h2');
+  title.style.fontSize = '2rem';
+  title.style.color = '#D63031';
+  title.style.marginBottom = '6px';
+  title.textContent = story.title || 'Untitled Story';
+
+  const date = document.createElement('p');
+  date.className = 'blog-post-date';
+  date.textContent = new Date(story.created).toLocaleDateString(undefined, {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  const heroImg = document.createElement('img');
+  heroImg.className = 'blog-story-hero-img';
+  heroImg.alt = `Drawing for ${story.title}`;
+  heroImg.src = story.drawingUrl || '';
+
+  const body = document.createElement('div');
+  body.className = 'blog-story-body';
+  body.textContent = story.storyText || '';
+
+  article.appendChild(backBtn);
+  article.appendChild(title);
+  article.appendChild(date);
+  article.appendChild(heroImg);
+  article.appendChild(body);
+
+  // Audio Recordings
+  const audioList = story.audioFiles || (story.audios ? story.audios : []);
+  if (audioList.length > 0) {
+    const audioSec = document.createElement('section');
+    audioSec.className = 'blog-audio-section';
+
+    const audioH = document.createElement('h3');
+    audioH.textContent = '🎙️ Voice Recordings';
+    audioSec.appendChild(audioH);
+
+    audioList.forEach((af, idx) => {
+      const row = document.createElement('div');
+      row.className = 'blog-audio-player-row';
+
+      const label = document.createElement('strong');
+      label.textContent = `Take ${idx + 1}:`;
+
+      const audio = document.createElement('audio');
+      audio.controls = true;
+      audio.src = af.url || '';
+      audio.preload = 'metadata';
+
+      row.appendChild(label);
+      row.appendChild(audio);
+      audioSec.appendChild(row);
+    });
+
+    article.appendChild(audioSec);
+  }
+
+  kidBlogBody.appendChild(article);
+}
+
+function closeKidBlogView() {
+  if (kidBlogDialog) kidBlogDialog.close();
+  revokeBlogUrls();
+}
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -1930,10 +2427,6 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-
-// ============================================================================
-// 13. Service Worker Registration & App Launch
-// ============================================================================
 
 window.addEventListener('DOMContentLoaded', async () => {
   initCanvas();

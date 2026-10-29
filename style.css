@@ -1038,3 +1038,220 @@ canvas#paint-canvas {
   background: #FED7D7;
   color: #742A2A;
 }
+
+.btn-blog {
+  background: linear-gradient(135deg, #FFEAA7 0%, #FDCB6E 100%);
+  color: #2D3436;
+  border-color: #F39C12;
+  font-weight: 800;
+}
+
+.btn-blog:hover {
+  background: linear-gradient(135deg, #FDCB6E 0%, #E67E22 100%);
+  color: #FFFFFF;
+}
+
+.btn-publish-prominent {
+  background: linear-gradient(135deg, #00B894 0%, #00CEC9 100%);
+  color: #FFFFFF;
+  border-color: #008768;
+  font-size: 1.15rem;
+  padding: 12px 24px;
+  font-weight: 900;
+  box-shadow: 0 4px 12px rgba(0, 184, 148, 0.3);
+}
+
+.btn-publish-prominent:hover {
+  background: linear-gradient(135deg, #00A381 0%, #00B7B2 100%);
+}
+
+.publish-result-box {
+  background: #EBF8FF;
+  border: 2px solid #90CDF4;
+  border-radius: var(--border-radius-sm);
+  padding: 14px;
+  margin-top: 14px;
+  color: #2B6CB0;
+  font-weight: 600;
+}
+
+.publish-result-box.error {
+  background: #FFF5F5;
+  border-color: #FEB2B2;
+  color: #C53030;
+}
+
+/* ==========================================================================
+   "See My Blog" Kid Fullscreen View
+   ========================================================================== */
+
+.fullscreen-dialog {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background-color: #FFF9ED;
+}
+
+.fullscreen-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.kid-blog-container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.kid-blog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 4px solid #FFEAA7;
+  padding-bottom: 18px;
+  gap: 16px;
+}
+
+.btn-back-big {
+  font-size: 1.15rem;
+  padding: 12px 22px;
+  font-weight: 800;
+}
+
+.kid-blog-title-area {
+  text-align: right;
+}
+
+.kid-blog-heading {
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #D63031;
+}
+
+.kid-blog-sub {
+  color: #636E72;
+  font-size: 1rem;
+}
+
+.kid-blog-content {
+  flex: 1;
+  padding-bottom: 40px;
+}
+
+/* Shared Blog Styling Elements */
+.blog-post-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.blog-post-card {
+  background: #FFFFFF;
+  border-radius: 20px;
+  border: 3px solid #EADDC7;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.blog-post-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+.blog-post-thumb {
+  width: 100%;
+  aspect-ratio: 800 / 550;
+  object-fit: contain;
+  background: #FAFBFD;
+  border-bottom: 2px solid #F1F2F6;
+}
+
+.blog-post-info {
+  padding: 16px;
+}
+
+.blog-post-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #2D3436;
+  margin-bottom: 6px;
+}
+
+.blog-post-date {
+  font-size: 0.9rem;
+  color: #A0AEC0;
+  font-weight: 600;
+}
+
+.blog-single-post {
+  background: #FFFFFF;
+  border-radius: 24px;
+  border: 3px solid #EADDC7;
+  padding: 32px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.05);
+}
+
+.blog-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 20px;
+  font-weight: 800;
+  color: #0984E3;
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.blog-story-hero-img {
+  width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 16px;
+  background: #FAFBFD;
+  border: 2px solid #EDF2F7;
+  margin: 20px 0;
+}
+
+.blog-story-body {
+  font-size: 1.35rem;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  margin: 24px 0;
+  color: #2D3436;
+}
+
+.blog-audio-section {
+  background: #FFF4E5;
+  border: 2px solid #FFE0B2;
+  border-radius: 16px;
+  padding: 18px;
+  margin-top: 24px;
+}
+
+.blog-audio-player-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.blog-audio-player-row audio {
+  width: 100%;
+  height: 44px;
+}
