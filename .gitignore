@@ -5,3 +5,9 @@ Thumbs.db
 # Logs & temp
 *.log
 
+# Deployment local config (contains local paths/project settings)
+deploy.config
+deploy/deploy.config
+site/
+
+

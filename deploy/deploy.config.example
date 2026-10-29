@@ -1,0 +1,15 @@
+# Story Desk - Cloudflare Pages Deploy Configuration
+# Copy this file to "deploy.config" in this folder and customize your settings.
+
+# 1. Your Cloudflare Pages project name (e.g. family-story-desk)
+PROJECT_NAME="family-story-desk"
+
+# 2. Path to your Story Desk "site" folder.
+# In Story Desk (File System Access mode), clicking "Publish" builds into a "site"
+# subfolder inside your chosen stories directory.
+# Example Linux/macOS: "/home/username/Documents/My Stories/site" or "../site"
+# Example Windows: "C:\Users\username\Documents\My Stories\site"
+SITE_DIR="../site"
+
+# 3. Target production branch (defaults to main so no preview URLs are generated)
+BRANCH="main"
