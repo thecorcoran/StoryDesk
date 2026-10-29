@@ -685,6 +685,10 @@ async function saveFullPost(showNotification = true) {
     STATE.currentPostId = 'post_' + Date.now();
   }
 
+  // Ensure an author is assigned
+  const authorId = STATE.currentAuthorId || STATE.activeProfileId || (STATE.profiles[0] ? STATE.profiles[0].id : null);
+  STATE.currentAuthorId = authorId;
+
   // Get Canvas Blob
   const canvasBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
 
@@ -692,6 +696,7 @@ async function saveFullPost(showNotification = true) {
   const postMetadata = {
     id: STATE.currentPostId,
     title: title,
+    author: authorId,
     created: dateIso,
     updated: new Date().toISOString(),
     storyText: text,
@@ -706,7 +711,6 @@ async function saveFullPost(showNotification = true) {
   let dirHandle = await getStoredDirectoryHandle();
 
   if (!dirHandle && 'showDirectoryPicker' in window) {
-    // First run prompt to choose folder
     const wantFolder = confirm('Would you like to choose a folder on your computer to save all your stories and pictures?');
     if (wantFolder) {
       dirHandle = await chooseStorageDirectory();
@@ -718,8 +722,13 @@ async function saveFullPost(showNotification = true) {
       const hasPerm = await verifyPermission(dirHandle, true);
       if (!hasPerm) throw new Error('Permission denied');
 
+      // New Folder Layout: Stories/<kid-slug>/<YYYY-MM-DD>_<story-slug>/
+      const storiesDir = await dirHandle.getDirectoryHandle('Stories', { create: true });
+      const activeProf = STATE.profiles.find(p => p.id === authorId);
+      const kidSlug = activeProf ? activeProf.slug : (authorId ? slugify(authorId) : 'general');
+      const kidDir = await storiesDir.getDirectoryHandle(kidSlug, { create: true });
       const folderName = sanitizeFolderName(title);
-      const postDir = await dirHandle.getDirectoryHandle(folderName, { create: true });
+      const postDir = await kidDir.getDirectoryHandle(folderName, { create: true });
 
       // 1. Write post.json
       const metaFile = await postDir.getFileHandle('post.json', { create: true });
@@ -761,7 +770,6 @@ async function saveFullPost(showNotification = true) {
 }
 
 async function savePostToIDB(meta, canvasBlob) {
-  // Convert audio takes into serializable blobs
   const audios = [];
   for (let i = 0; i < STATE.audioTakes.length; i++) {
     audios.push({
@@ -781,7 +789,7 @@ async function savePostToIDB(meta, canvasBlob) {
 }
 
 // ============================================================================
-// 9. My Stories Gallery
+// 9. My Stories Gallery & Multi-Profile Support
 // ============================================================================
 
 const galleryBtn = document.getElementById('btn-gallery');
@@ -794,11 +802,22 @@ async function openGallery() {
   container.innerHTML = '<p>Loading your wonderful stories...</p>';
   galleryDialog.showModal();
 
-  const posts = await loadAllPostsFromDiskOrIDB();
+  const allPosts = await loadAllPostsFromDiskOrIDB();
   container.innerHTML = '';
 
+  // Filter posts for the currently active profile
+  const activeKid = STATE.profiles.find(p => p.id === STATE.activeProfileId);
+  const posts = allPosts.filter(p => {
+    if (!STATE.activeProfileId) return true;
+    if (p.author === STATE.activeProfileId) return true;
+    // Backward compat: if post has no author and only 1 profile exists, attribute to it
+    if (!p.author && STATE.profiles.length <= 1) return true;
+    return false;
+  });
+
   if (posts.length === 0) {
-    container.innerHTML = '<p class="empty-takes">No stories saved yet. Draw and write something, then click Save!</p>';
+    const kidName = activeKid ? activeKid.name : 'you';
+    container.innerHTML = `<p class="empty-takes">No stories saved for ${escapeHtml(kidName)} yet. Draw and write something, then click Save!</p>`;
     return;
   }
 
@@ -818,7 +837,7 @@ async function openGallery() {
 
     const h3 = document.createElement('h3');
     h3.className = 'gallery-post-title';
-    h3.textContent = post.title || 'Untitled Story';
+    h3.innerHTML = `${escapeHtml(post.title || 'Untitled Story')} <span class="gallery-badge ${post.isPublished ? 'published' : 'draft'}">${post.isPublished ? '⭐ Published' : '📝 Draft'}</span>`;
 
     const date = document.createElement('div');
     date.className = 'gallery-post-date';
@@ -851,40 +870,83 @@ async function openGallery() {
   });
 }
 
+async function readPostFromDir(postDirHandle) {
+  try {
+    const metaHandle = await postDirHandle.getFileHandle('post.json');
+    const metaFile = await metaHandle.getFile();
+    const metaText = await metaFile.text();
+    const meta = JSON.parse(metaText);
+
+    let drawingUrl = '';
+    try {
+      const drawHandle = await postDirHandle.getFileHandle('drawing.png');
+      const drawFile = await drawHandle.getFile();
+      drawingUrl = URL.createObjectURL(drawFile);
+    } catch (_) {}
+
+    return {
+      ...meta,
+      dirHandle: postDirHandle,
+      drawingUrl: drawingUrl
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
 async function loadAllPostsFromDiskOrIDB() {
   const results = [];
+  const seenIds = new Set();
   const dirHandle = await getStoredDirectoryHandle();
 
   if (dirHandle && 'showDirectoryPicker' in window) {
     try {
       const hasPerm = await verifyPermission(dirHandle, false);
       if (hasPerm) {
+        // 1. Check Stories/ subfolder (New Layout: Stories/<kid-slug>/<post-folder>/)
+        try {
+          const storiesDir = await dirHandle.getDirectoryHandle('Stories');
+          for await (const kidEntry of storiesDir.values()) {
+            if (kidEntry.kind === 'directory' && !kidEntry.name.startsWith('.') && !kidEntry.name.startsWith('_')) {
+              for await (const postEntry of kidEntry.values()) {
+                if (postEntry.kind === 'directory' && !postEntry.name.startsWith('.')) {
+                  const post = await readPostFromDir(postEntry);
+                  if (post && !seenIds.has(post.id)) {
+                    seenIds.add(post.id);
+                    results.push(post);
+                  }
+                }
+              }
+            }
+          }
+        } catch (_) {}
+
+        // 2. Check root-level entries (Old Layout: <post-folder>/ or direct <kid-slug>/<post-folder>/)
         for await (const entry of dirHandle.values()) {
-          if (entry.kind === 'directory' && !entry.name.startsWith('.') && !entry.name.startsWith('_')) {
-            try {
-              const metaHandle = await entry.getFileHandle('post.json');
-              const metaFile = await metaHandle.getFile();
-              const metaText = await metaFile.text();
-              const meta = JSON.parse(metaText);
-
-              let drawingUrl = '';
+          if (entry.kind === 'directory' && !entry.name.startsWith('.') && !entry.name.startsWith('_') && entry.name !== 'site' && entry.name !== 'Stories') {
+            const directPost = await readPostFromDir(entry);
+            if (directPost) {
+              if (!seenIds.has(directPost.id)) {
+                seenIds.add(directPost.id);
+                results.push(directPost);
+              }
+            } else {
+              // Check if entry is a kid folder containing post folders
               try {
-                const drawHandle = await entry.getFileHandle('drawing.png');
-                const drawFile = await drawHandle.getFile();
-                drawingUrl = URL.createObjectURL(drawFile);
+                for await (const subEntry of entry.values()) {
+                  if (subEntry.kind === 'directory' && !subEntry.name.startsWith('.')) {
+                    const subPost = await readPostFromDir(subEntry);
+                    if (subPost && !seenIds.has(subPost.id)) {
+                      seenIds.add(subPost.id);
+                      results.push(subPost);
+                    }
+                  }
+                }
               } catch (_) {}
-
-              // Keep directory handle attached to post object for loading
-              results.push({
-                ...meta,
-                dirHandle: entry,
-                drawingUrl: drawingUrl
-              });
-            } catch (_) {
-              // Not a post directory, ignore
             }
           }
         }
+
         if (results.length > 0) return results;
       }
     } catch (err) {
@@ -910,7 +972,17 @@ async function loadPostIntoEditor(post) {
 
   STATE.currentPostId = post.id;
   STATE.currentPostDate = post.created;
+  STATE.currentAuthorId = post.author || STATE.activeProfileId || null;
   STATE.isPublished = !!post.isPublished;
+
+  // Switch active profile in UI if post has a known author
+  if (post.author) {
+    const matchingProfile = STATE.profiles.find(p => p.id === post.author);
+    if (matchingProfile && matchingProfile.id !== STATE.activeProfileId) {
+      await setActiveProfile(matchingProfile.id);
+    }
+  }
+
   document.getElementById('story-title').value = post.title || '';
   storyTextarea.value = post.storyText || '';
 
@@ -1275,6 +1347,30 @@ document.getElementById('first-run-profile-form')?.addEventListener('submit', as
   await saveProfilesToDiskAndIDB([firstProfile]);
   await setActiveProfile(firstProfile.id);
 
+  // Reassign any existing unassigned stories to this new first profile
+  const allPosts = await loadAllPostsFromDiskOrIDB();
+  const unassigned = allPosts.filter(p => !p.author);
+  for (const p of unassigned) {
+    p.author = firstProfile.id;
+    if (p.dirHandle) {
+      try {
+        const metaH = await p.dirHandle.getFileHandle('post.json', { create: true });
+        const metaW = await metaH.createWritable();
+        const clone = { ...p };
+        delete clone.dirHandle;
+        delete clone.drawingUrl;
+        await metaW.write(JSON.stringify(clone, null, 2));
+        await metaW.close();
+      } catch (_) {}
+    }
+    const idbPosts = await idbGetAllPosts();
+    const match = idbPosts.find(item => item.id === p.id);
+    if (match) {
+      match.author = firstProfile.id;
+      await idbPutPost(match);
+    }
+  }
+
   document.getElementById('profile-setup-dialog')?.close();
   showAlert(`Welcome, ${name}! Your Story Desk is ready!`, '🎨');
   startNewPost();
@@ -1312,41 +1408,95 @@ dadGateForm.addEventListener('submit', (e) => {
 async function openDadAdmin() {
   updateDadFolderStatus();
   renderDadProfilesList();
+  await updateUnassignedStoriesUI();
   await renderDadPostsTable();
   dadAdminDialog.showModal();
 }
 
-async function updateDadFolderStatus() {
-  const statusEl = document.getElementById('folder-status-text');
-  const dir = await getStoredDirectoryHandle();
-  if (dir) {
-    statusEl.textContent = `Active folder: "${dir.name}" on her computer.`;
+async function updateUnassignedStoriesUI() {
+  const unassignedSection = document.getElementById('dad-unassigned-section');
+  const countText = document.getElementById('unassigned-count-text');
+  if (!unassignedSection || !countText) return;
+
+  const allPosts = await loadAllPostsFromDiskOrIDB();
+  const unassigned = allPosts.filter(p => !p.author || !STATE.profiles.some(prof => prof.id === p.author));
+
+  if (unassigned.length > 0 && STATE.profiles.length > 0) {
+    unassignedSection.classList.remove('hidden');
+    countText.textContent = `Found ${unassigned.length} story(ies) currently unassigned to an active profile.`;
   } else {
-    statusEl.textContent = 'Using browser IndexedDB. Click below to connect a folder on her computer!';
+    unassignedSection.classList.add('hidden');
   }
 }
 
-document.getElementById('btn-pick-folder').addEventListener('click', async () => {
-  await chooseStorageDirectory();
+document.getElementById('btn-reassign-all')?.addEventListener('click', async () => {
+  const targetId = document.getElementById('select-reassign-profile')?.value;
+  if (!targetId) {
+    alert('Please select a profile to assign stories to.');
+    return;
+  }
+  const targetProfile = STATE.profiles.find(p => p.id === targetId);
+  if (!targetProfile) return;
+
+  const allPosts = await loadAllPostsFromDiskOrIDB();
+  const unassigned = allPosts.filter(p => !p.author || !STATE.profiles.some(prof => prof.id === p.author));
+
+  for (const post of unassigned) {
+    post.author = targetProfile.id;
+    if (post.dirHandle) {
+      try {
+        const metaHandle = await post.dirHandle.getFileHandle('post.json', { create: true });
+        const writable = await metaHandle.createWritable();
+        const clone = { ...post };
+        delete clone.dirHandle;
+        delete clone.drawingUrl;
+        await writable.write(JSON.stringify(clone, null, 2));
+        await writable.close();
+      } catch (err) {
+        console.warn('Failed to update author on disk:', err);
+      }
+    }
+    const idbPosts = await idbGetAllPosts();
+    const match = idbPosts.find(p => p.id === post.id);
+    if (match) {
+      match.author = targetProfile.id;
+      await idbPutPost(match);
+    }
+  }
+
+  showAlert(`Assigned ${unassigned.length} story(ies) to ${targetProfile.name}!`, '🎉');
+  await updateUnassignedStoriesUI();
+  await renderDadPostsTable();
 });
+
+document.getElementById('filter-dad-author')?.addEventListener('change', renderDadPostsTable);
 
 async function renderDadPostsTable() {
   const container = document.getElementById('dad-posts-table');
+  const filterAuthor = document.getElementById('filter-dad-author')?.value;
   container.innerHTML = '<p>Loading stories...</p>';
   const posts = await loadAllPostsFromDiskOrIDB();
   container.innerHTML = '';
 
-  if (posts.length === 0) {
-    container.innerHTML = '<p>No stories found.</p>';
+  const filtered = posts.filter(p => {
+    if (!filterAuthor || filterAuthor === 'all') return true;
+    return p.author === filterAuthor;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<p>No stories found for this filter.</p>';
     return;
   }
 
-  posts.forEach(post => {
+  filtered.forEach(post => {
     const row = document.createElement('div');
     row.className = 'admin-post-row';
 
+    const authorProf = STATE.profiles.find(p => p.id === post.author);
+    const authorBadge = authorProf ? `${authorProf.emoji} ${authorProf.name}` : '⚠️ Unassigned';
+
     const info = document.createElement('div');
-    info.innerHTML = `<strong>${escapeHtml(post.title || 'Untitled')}</strong> (${new Date(post.created).toLocaleDateString()}) - ${post.audioFiles ? post.audioFiles.length : (post.audios ? post.audios.length : 0)} audio file(s)`;
+    info.innerHTML = `<strong>${escapeHtml(post.title || 'Untitled')}</strong> [${authorBadge}] (${new Date(post.created).toLocaleDateString()}) - ${post.audioFiles ? post.audioFiles.length : (post.audios ? post.audios.length : 0)} audio file(s)`;
 
     const actions = document.createElement('div');
     actions.style.display = 'flex';

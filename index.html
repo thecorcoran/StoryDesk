@@ -291,6 +291,17 @@
               <button type="submit" class="admin-btn btn-accent">Add Child</button>
             </div>
           </form>
+
+          <!-- Unassigned Stories Reassignment Section (shown if needed) -->
+          <div id="dad-unassigned-section" class="unassigned-section hidden">
+            <h4>⚠️ Unassigned Stories</h4>
+            <p id="unassigned-count-text">There are stories without an assigned writer.</p>
+            <div class="reassign-row">
+              <label for="select-reassign-profile">Assign them to:</label>
+              <select id="select-reassign-profile" class="admin-select"></select>
+              <button type="button" id="btn-reassign-all" class="admin-btn">Assign All</button>
+            </div>
+          </div>
         </section>
 
         <!-- Storage Setup Section -->
@@ -326,6 +337,12 @@
         <!-- Post Publishing Manager -->
         <section class="admin-section">
           <h3>📝 Story Publishing Review</h3>
+          <div class="admin-filter-bar">
+            <label for="filter-dad-author">Filter by child:</label>
+            <select id="filter-dad-author" class="admin-select">
+              <option value="all">All Children</option>
+            </select>
+          </div>
           <div id="dad-posts-table" class="admin-posts-container">
             <!-- Rendered by app.js -->
           </div>
