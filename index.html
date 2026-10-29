@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#FFEAA7">
+  <title>Story Desk</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a href="#story-title" class="skip-link">Skip to story</a>
+
+  <!-- Top Navigation Bar -->
+  <header class="top-nav" role="banner">
+    <div class="logo-area">
+      <span class="logo-emoji" aria-hidden="true">🎨</span>
+      <h1 class="app-title">Story Desk</h1>
+    </div>
+
+    <div class="nav-actions">
+      <div id="autosave-status" class="save-badge" aria-live="polite">
+        <span class="badge-dot" aria-hidden="true"></span>
+        <span id="autosave-text">Draft ready</span>
+      </div>
+
+      <button id="btn-new-post" class="nav-btn btn-fun" type="button" title="Start a fresh story">
+        <span aria-hidden="true">✨</span> New Story
+      </button>
+
+      <button id="btn-gallery" class="nav-btn btn-gallery" type="button" title="Open my saved stories">
+        <span aria-hidden="true">📚</span> My Stories
+      </button>
+
+      <button id="btn-save" class="nav-btn btn-save-big" type="button" title="Save your work">
+        <span aria-hidden="true">💾</span> Save!
+      </button>
+
+      <button id="btn-dad-login" class="nav-btn btn-dad" type="button" aria-haspopup="dialog" title="Parent settings">
+        <span aria-hidden="true">🔒</span> Dad
+      </button>
+    </div>
+  </header>
+
+  <!-- Notification Banner -->
+  <aside id="alert-banner" class="alert-banner hidden" role="status" aria-live="polite">
+    <span id="alert-icon" aria-hidden="true">💡</span>
+    <p id="alert-msg">Welcome to your Story Desk!</p>
+    <button id="btn-alert-close" type="button" class="btn-close-banner" aria-label="Dismiss message">✕</button>
+  </aside>
+
+  <!-- Main Workspace -->
+  <main id="main-content" class="workspace" role="main">
+
+    <!-- Story Title Section -->
+    <section class="title-card card" aria-labelledby="title-label">
+      <label id="title-label" for="story-title" class="section-title">
+        <span aria-hidden="true">⭐</span> Story Title
+      </label>
+      <input 
+        type="text" 
+        id="story-title" 
+        class="kid-input" 
+        placeholder="My Amazing Dragon Adventure..." 
+        maxlength="120"
+        autocomplete="off"
+      >
+    </section>
+
+    <div class="desk-grid">
+      <!-- Drawing Desk -->
+      <section class="drawing-card card" aria-labelledby="drawing-heading">
+        <div class="card-header">
+          <h2 id="drawing-heading" class="section-title">
+            <span aria-hidden="true">🖌️</span> Draw a Picture
+          </h2>
+          <div class="canvas-actions">
+            <button id="btn-undo" class="tool-btn" type="button" title="Undo the last brush stroke">
+              <span aria-hidden="true">↩️</span> Undo
+            </button>
+            <button id="btn-clear-canvas" class="tool-btn btn-danger-soft" type="button" title="Erase the whole drawing">
+              <span aria-hidden="true">🗑️</span> Start Over
+            </button>
+          </div>
+        </div>
+
+        <!-- Drawing Canvas Area -->
+        <div class="canvas-container">
+          <canvas 
+            id="paint-canvas" 
+            width="800" 
+            height="550" 
+            role="img" 
+            aria-label="Drawing area. Use mouse, touch, or stylus to draw."
+          ></canvas>
+        </div>
+
+        <!-- Color Palette & Tools -->
+        <div class="palette-tools">
+          <fieldset class="tool-group">
+            <legend class="tool-label">Colors</legend>
+            <div id="color-palette" class="swatch-list" role="radiogroup" aria-label="Brush colors">
+              <!-- Colors injected by app.js -->
+            </div>
+          </fieldset>
+
+          <fieldset class="tool-group">
+            <legend class="tool-label">Brush Size</legend>
+            <div class="size-buttons" role="radiogroup" aria-label="Brush sizes">
+              <button type="button" class="size-btn" data-size="4" aria-label="Small brush">
+                <span class="dot size-sm" aria-hidden="true"></span> Small
+              </button>
+              <button type="button" class="size-btn active" data-size="12" aria-label="Medium brush">
+                <span class="dot size-md" aria-hidden="true"></span> Medium
+              </button>
+              <button type="button" class="size-btn" data-size="28" aria-label="Big brush">
+                <span class="dot size-lg" aria-hidden="true"></span> Big
+              </button>
+              <button type="button" id="btn-eraser" class="size-btn btn-eraser" aria-label="Eraser tool">
+                <span aria-hidden="true">🧼</span> Eraser
+              </button>
+            </div>
+          </fieldset>
+        </div>
+      </section>
+
+      <!-- Writing & Voice Desk -->
+      <section class="story-card card" aria-labelledby="story-heading">
+        <div class="card-header">
+          <h2 id="story-heading" class="section-title">
+            <span aria-hidden="true">📖</span> Write Your Story
+          </h2>
+          <button id="btn-read-aloud" class="voice-read-btn" type="button">
+            <span id="read-icon" aria-hidden="true">🔊</span>
+            <span id="read-label">Read it to me!</span>
+          </button>
+        </div>
+
+        <textarea 
+          id="story-text" 
+          class="kid-textarea" 
+          placeholder="Once upon a time in a friendly forest..." 
+          aria-label="Story writing area"
+        ></textarea>
+
+        <!-- Voice Recorder Studio -->
+        <div class="recorder-studio" aria-labelledby="voice-heading">
+          <div class="recorder-top">
+            <h3 id="voice-heading" class="recorder-title">
+              <span aria-hidden="true">🎙️</span> Voice Studio
+            </h3>
+            <div id="recording-timer" class="recording-timer" aria-live="off">00:00 / 05:00</div>
+          </div>
+
+          <div class="recorder-controls">
+            <button id="btn-mic-record" class="rec-btn btn-rec" type="button">
+              <span class="rec-dot" aria-hidden="true"></span> Record Voice
+            </button>
+            <button id="btn-mic-stop" class="rec-btn btn-stop" type="button" disabled>
+              <span class="stop-square" aria-hidden="true"></span> Stop
+            </button>
+          </div>
+
+          <p id="mic-status-msg" class="kid-hint">Record yourself reading your story! Up to 5 minutes each.</p>
+
+          <!-- List of recorded takes for this post -->
+          <div class="takes-list-container">
+            <h4 class="takes-heading">My Recordings for this Story:</h4>
+            <ul id="takes-list" class="takes-list" aria-label="Voice recordings list">
+              <li class="empty-takes">No recordings yet. Press "Record Voice" to make one!</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- "My Stories" Gallery Dialog -->
+  <dialog id="gallery-dialog" class="kid-dialog" aria-labelledby="gallery-title">
+    <div class="dialog-card">
+      <div class="dialog-header">
+        <h2 id="gallery-title" class="dialog-heading">
+          <span aria-hidden="true">📚</span> My Stories
+        </h2>
+        <button type="button" class="btn-close-dialog" data-close="gallery-dialog" aria-label="Close stories gallery">✕</button>
+      </div>
+      <div id="gallery-posts-container" class="gallery-grid" role="region" aria-label="List of past stories">
+        <!-- Rendered by app.js -->
+      </div>
+      <div class="dialog-footer">
+        <button type="button" class="nav-btn btn-fun" data-close="gallery-dialog">Back to Desk</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dad Area Passcode Gate Dialog -->
+  <dialog id="dad-gate-dialog" class="kid-dialog" aria-labelledby="dad-gate-title">
+    <div class="dialog-card gate-card">
+      <div class="dialog-header">
+        <h2 id="dad-gate-title" class="dialog-heading">
+          <span aria-hidden="true">🔐</span> Parent Area
+        </h2>
+        <button type="button" class="btn-close-dialog" data-close="dad-gate-dialog" aria-label="Close parent login">✕</button>
+      </div>
+      <p class="gate-prompt">Type the secret parent word to enter:</p>
+      <form id="dad-gate-form">
+        <input 
+          type="text" 
+          id="dad-passcode" 
+          class="kid-input" 
+          placeholder="Secret word" 
+          autocomplete="off" 
+          autocapitalize="off"
+          spellcheck="false"
+          required
+        >
+        <p id="dad-gate-error" class="error-text hidden">That's not the secret word! Ask Dad for help.</p>
+        <div class="dialog-footer">
+          <button type="submit" class="nav-btn btn-save-big">Open Parent Area</button>
+          <button type="button" class="nav-btn btn-tool" data-close="dad-gate-dialog">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Dad Admin Dashboard Dialog -->
+  <dialog id="dad-admin-dialog" class="kid-dialog" aria-labelledby="dad-admin-title">
+    <div class="dialog-card admin-card">
+      <div class="dialog-header">
+        <h2 id="dad-admin-title" class="dialog-heading">
+          <span aria-hidden="true">🛠️</span> Parent Dashboard
+        </h2>
+        <button type="button" class="btn-close-dialog" data-close="dad-admin-dialog" aria-label="Close parent dashboard">✕</button>
+      </div>
+
+      <div class="admin-sections">
+        <!-- Storage Setup Section -->
+        <section class="admin-section">
+          <h3>📁 Local Folder Storage</h3>
+          <p id="folder-status-text">Checking storage handle...</p>
+          <div class="admin-buttons-row">
+            <button id="btn-pick-folder" class="admin-btn" type="button">
+              Choose Story Folder on Computer
+            </button>
+            <button id="btn-export-everything" class="admin-btn btn-accent" type="button">
+              Export Everything as .ZIP
+            </button>
+          </div>
+        </section>
+
+        <!-- Static Blog Generator Section -->
+        <section class="admin-section">
+          <h3>🌐 Static Blog Site Publisher</h3>
+          <p>Generate a private, self-contained HTML site containing her published posts.</p>
+          <label class="checkbox-label">
+            <input type="checkbox" id="chk-include-audio" checked>
+            Include voice recordings on the blog
+          </label>
+          <div class="admin-buttons-row">
+            <button id="btn-generate-site" class="admin-btn btn-publish" type="button">
+              Make Blog Site Files
+            </button>
+          </div>
+          <p id="publish-status-msg" class="admin-status-text"></p>
+        </section>
+
+        <!-- Post Publishing Manager -->
+        <section class="admin-section">
+          <h3>📝 Story Publishing Review</h3>
+          <div id="dad-posts-table" class="admin-posts-container">
+            <!-- Rendered by app.js -->
+          </div>
+        </section>
+      </div>
+
+      <div class="dialog-footer">
+        <button type="button" class="nav-btn btn-fun" data-close="dad-admin-dialog">Done</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
