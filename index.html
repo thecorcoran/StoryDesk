@@ -20,6 +20,17 @@
       <h1 class="app-title">Story Desk</h1>
     </div>
 
+    <!-- Active Kid Profile Selector -->
+    <div class="profile-picker-container" id="profile-picker-container">
+      <label for="select-profile" class="profile-label">Who's writing?</label>
+      <div class="profile-pill" id="profile-pill">
+        <span id="active-profile-avatar" class="profile-avatar" aria-hidden="true">⭐</span>
+        <select id="select-profile" class="profile-select" aria-label="Who's writing?">
+          <!-- Populated by app.js -->
+        </select>
+      </div>
+    </div>
+
     <div class="nav-actions">
       <div id="autosave-status" class="save-badge" aria-live="polite">
         <span class="badge-dot" aria-hidden="true"></span>
@@ -236,6 +247,52 @@
       </div>
 
       <div class="admin-sections">
+        <!-- Kid Profiles Section -->
+        <section class="admin-section" aria-labelledby="heading-profiles">
+          <h3 id="heading-profiles">👥 Kid Profiles</h3>
+          <p>Manage the young writers using Story Desk on this computer.</p>
+          
+          <div id="dad-profiles-list" class="profiles-list-container">
+            <!-- Rendered by app.js -->
+          </div>
+
+          <form id="form-add-profile" class="add-profile-form">
+            <h4>Add a New Writer</h4>
+            <div class="profile-form-row">
+              <input 
+                type="text" 
+                id="input-new-profile-name" 
+                class="kid-input input-profile-name" 
+                placeholder="Writer's name (e.g. Maya)" 
+                maxlength="30"
+                required
+              >
+              <div class="emoji-picker-row">
+                <label for="select-profile-emoji" class="sr-only">Choose an emoji</label>
+                <select id="select-profile-emoji" class="emoji-select">
+                  <option value="🦄">🦄 Unicorn</option>
+                  <option value="🎨" selected>🎨 Artist</option>
+                  <option value="🚀">🚀 Rocket</option>
+                  <option value="🦁">🦁 Lion</option>
+                  <option value="🦖">🦖 Dino</option>
+                  <option value="🐬">🐬 Dolphin</option>
+                  <option value="⭐">⭐ Star</option>
+                  <option value="🌈">🌈 Rainbow</option>
+                  <option value="🐱">🐱 Kitten</option>
+                  <option value="🐶">🐶 Puppy</option>
+                  <option value="🐲">🐲 Dragon</option>
+                  <option value="🍄">🍄 Mushroom</option>
+                </select>
+              </div>
+              <div class="color-picker-row">
+                <label for="input-profile-color" class="color-label">Color:</label>
+                <input type="color" id="input-profile-color" value="#FD79A8" class="color-input">
+              </div>
+              <button type="submit" class="admin-btn btn-accent">Add Child</button>
+            </div>
+          </form>
+        </section>
+
         <!-- Storage Setup Section -->
         <section class="admin-section">
           <h3>📁 Local Folder Storage</h3>
@@ -278,6 +335,58 @@
       <div class="dialog-footer">
         <button type="button" class="nav-btn btn-fun" data-close="dad-admin-dialog">Done</button>
       </div>
+    </div>
+  </dialog>
+
+  <!-- First-Run / Dad Setup Dialog -->
+  <dialog id="profile-setup-dialog" class="kid-dialog" aria-labelledby="setup-title">
+    <div class="dialog-card gate-card">
+      <div class="dialog-header">
+        <h2 id="setup-title" class="dialog-heading">
+          <span aria-hidden="true">👋</span> Welcome to Story Desk!
+        </h2>
+      </div>
+      <p id="setup-intro-text" class="gate-prompt">
+        Let's set up your child's profile to get started!
+      </p>
+      <form id="first-run-profile-form">
+        <div class="form-group">
+          <label for="setup-kid-name" class="tool-label">Child's Name:</label>
+          <input 
+            type="text" 
+            id="setup-kid-name" 
+            class="kid-input" 
+            placeholder="e.g. Maya" 
+            maxlength="30"
+            required
+            autocomplete="off"
+          >
+        </div>
+        <div class="form-group-row">
+          <div>
+            <label for="setup-kid-emoji" class="tool-label">Favorite Emoji:</label>
+            <select id="setup-kid-emoji" class="emoji-select">
+              <option value="🦄">🦄 Unicorn</option>
+              <option value="🎨" selected>🎨 Artist</option>
+              <option value="🚀">🚀 Rocket</option>
+              <option value="🦁">🦁 Lion</option>
+              <option value="🦖">🦖 Dino</option>
+              <option value="🐬">🐬 Dolphin</option>
+              <option value="⭐">⭐ Star</option>
+              <option value="🌈">🌈 Rainbow</option>
+              <option value="🐱">🐱 Kitten</option>
+              <option value="🐶">🐶 Puppy</option>
+            </select>
+          </div>
+          <div>
+            <label for="setup-kid-color" class="tool-label">Favorite Color:</label>
+            <input type="color" id="setup-kid-color" value="#FD79A8" class="color-input">
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button type="submit" class="nav-btn btn-save-big">Save Profile &amp; Start Writing!</button>
+        </div>
+      </form>
     </div>
   </dialog>
 

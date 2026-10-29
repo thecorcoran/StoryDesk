@@ -101,6 +101,7 @@ if (navigator.storage && navigator.storage.persist) {
 const STATE = {
   currentPostId: null,
   currentPostDate: null,
+  currentAuthorId: null, // Profile ID of the author for the active post
   isPublished: false,
   isDirty: false,
   rootDirectoryHandle: null,
@@ -111,6 +112,8 @@ const STATE = {
   currentSize: 12,
   isEraser: false,
   parentPasscode: 'dad', // Friendly gate word for dad
+  profiles: [], // Array of { id, name, slug, emoji, color }
+  activeProfileId: null, // Currently selected kid's profile ID
 };
 
 const PALETTE_COLORS = [
@@ -998,8 +1001,287 @@ document.querySelectorAll('[data-close]').forEach(btn => {
   });
 });
 
+function slugify(text) {
+  return (text || '')
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'kid';
+}
+
 // ============================================================================
-// 10. Parent Area (Dad Gate & Admin Dashboard)
+// 10. Multi-Kid Profile Management
+// ============================================================================
+
+async function loadProfilesFromDiskOrIDB() {
+  let profiles = null;
+  const dirHandle = await getStoredDirectoryHandle();
+  if (dirHandle && 'showDirectoryPicker' in window) {
+    try {
+      const perm = await verifyPermission(dirHandle, false);
+      if (perm) {
+        const fileHandle = await dirHandle.getFileHandle('profiles.json');
+        const file = await fileHandle.getFile();
+        const text = await file.text();
+        profiles = JSON.parse(text);
+      }
+    } catch (_) {}
+  }
+  if (!profiles || !Array.isArray(profiles) || profiles.length === 0) {
+    profiles = await idbGet('settings', 'profiles');
+  }
+  return Array.isArray(profiles) ? profiles : [];
+}
+
+async function saveProfilesToDiskAndIDB(profiles) {
+  STATE.profiles = profiles;
+  await idbSet('settings', 'profiles', profiles);
+  const dirHandle = await getStoredDirectoryHandle();
+  if (dirHandle && 'showDirectoryPicker' in window) {
+    try {
+      const perm = await verifyPermission(dirHandle, true);
+      if (perm) {
+        const fileHandle = await dirHandle.getFileHandle('profiles.json', { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(JSON.stringify(profiles, null, 2));
+        await writable.close();
+      }
+    } catch (e) {
+      console.warn('Could not write profiles.json to disk:', e);
+    }
+  }
+  renderProfileDropdown();
+  renderDadProfilesList();
+}
+
+function renderProfileDropdown() {
+  const select = document.getElementById('select-profile');
+  if (!select) return;
+  select.innerHTML = '';
+
+  if (STATE.profiles.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Add Kid...';
+    select.appendChild(opt);
+    updateActiveProfileVisuals(null);
+    return;
+  }
+
+  STATE.profiles.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `${p.emoji || '⭐'} ${p.name}`;
+    if (p.id === STATE.activeProfileId) {
+      opt.selected = true;
+    }
+    select.appendChild(opt);
+  });
+
+  const active = STATE.profiles.find(p => p.id === STATE.activeProfileId) || STATE.profiles[0];
+  if (active && active.id !== STATE.activeProfileId) {
+    setActiveProfile(active.id);
+  } else {
+    updateActiveProfileVisuals(active);
+  }
+}
+
+async function setActiveProfile(profileId) {
+  const profile = STATE.profiles.find(p => p.id === profileId);
+  if (!profile) return;
+  STATE.activeProfileId = profile.id;
+  STATE.currentAuthorId = profile.id;
+  await idbSet('settings', 'active_profile_id', profile.id);
+
+  const select = document.getElementById('select-profile');
+  if (select && select.value !== profile.id) {
+    select.value = profile.id;
+  }
+  updateActiveProfileVisuals(profile);
+}
+
+function updateActiveProfileVisuals(profile) {
+  const avatar = document.getElementById('active-profile-avatar');
+  const pill = document.getElementById('profile-pill');
+  if (!avatar || !pill) return;
+  if (profile) {
+    avatar.textContent = profile.emoji || '⭐';
+    if (profile.color) {
+      pill.style.borderColor = profile.color;
+      pill.style.boxShadow = `0 2px 8px ${profile.color}40`;
+    }
+  } else {
+    avatar.textContent = '⭐';
+    pill.style.borderColor = '#FDCB6E';
+    pill.style.boxShadow = 'none';
+  }
+}
+
+document.getElementById('select-profile')?.addEventListener('change', async (e) => {
+  const selectedId = e.target.value;
+  if (!selectedId) return;
+
+  if (STATE.isDirty) {
+    const proceed = confirm('Save your current story changes before switching writers?');
+    if (proceed) {
+      await saveFullPost(false);
+    }
+  }
+  await setActiveProfile(selectedId);
+  startNewPost();
+});
+
+// Dad Profile Management: Add, Rename, Remove
+function renderDadProfilesList() {
+  const listContainer = document.getElementById('dad-profiles-list');
+  if (!listContainer) return;
+  listContainer.innerHTML = '';
+
+  if (STATE.profiles.length === 0) {
+    listContainer.innerHTML = '<p class="kid-hint">No kid profiles yet. Add one below!</p>';
+    return;
+  }
+
+  STATE.profiles.forEach(prof => {
+    const row = document.createElement('div');
+    row.className = 'profile-item-row';
+
+    const info = document.createElement('div');
+    info.className = 'profile-item-info';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'profile-avatar-tag';
+    avatar.style.backgroundColor = prof.color || '#FD79A8';
+    avatar.textContent = prof.emoji || '⭐';
+
+    const label = document.createElement('span');
+    label.textContent = `${prof.name} (${prof.slug})`;
+
+    info.appendChild(avatar);
+    info.appendChild(label);
+
+    const actions = document.createElement('div');
+    actions.className = 'profile-item-actions';
+
+    const renameBtn = document.createElement('button');
+    renameBtn.type = 'button';
+    renameBtn.className = 'admin-btn btn-secondary';
+    renameBtn.textContent = 'Rename';
+    renameBtn.addEventListener('click', () => handleRenameProfile(prof.id));
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'admin-btn btn-danger-soft';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', () => handleRemoveProfile(prof.id));
+
+    actions.appendChild(renameBtn);
+    actions.appendChild(removeBtn);
+
+    row.appendChild(info);
+    row.appendChild(actions);
+    listContainer.appendChild(row);
+  });
+}
+
+document.getElementById('form-add-profile')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nameInput = document.getElementById('input-new-profile-name');
+  const emojiSelect = document.getElementById('select-profile-emoji');
+  const colorInput = document.getElementById('input-profile-color');
+
+  const name = nameInput.value.trim();
+  if (!name) return;
+
+  let baseSlug = slugify(name);
+  let finalSlug = baseSlug;
+  let counter = 2;
+  while (STATE.profiles.some(p => p.slug === finalSlug)) {
+    finalSlug = `${baseSlug}-${counter++}`;
+  }
+
+  const newProfile = {
+    id: 'profile_' + Date.now(),
+    name: name,
+    slug: finalSlug,
+    emoji: emojiSelect.value || '⭐',
+    color: colorInput.value || '#FD79A8'
+  };
+
+  const updatedProfiles = [...STATE.profiles, newProfile];
+  await saveProfilesToDiskAndIDB(updatedProfiles);
+  await setActiveProfile(newProfile.id);
+
+  nameInput.value = '';
+  showAlert(`Added profile for ${name}!`, '🎉');
+  await renderDadPostsTable();
+});
+
+async function handleRenameProfile(profileId) {
+  const profile = STATE.profiles.find(p => p.id === profileId);
+  if (!profile) return;
+
+  const newName = prompt(`Rename writer "${profile.name}" to:`, profile.name);
+  if (!newName || !newName.trim() || newName.trim() === profile.name) return;
+
+  profile.name = newName.trim();
+  await saveProfilesToDiskAndIDB(STATE.profiles);
+  showAlert(`Renamed to ${profile.name}!`, '✏️');
+}
+
+async function handleRemoveProfile(profileId) {
+  const profile = STATE.profiles.find(p => p.id === profileId);
+  if (!profile) return;
+
+  const sure = confirm(
+    `Remove profile for "${profile.name}"?\n\nNOTE: Stories written by ${profile.name} will NOT be deleted. They will become "Unassigned" so you can reassign them anytime.`
+  );
+  if (!sure) return;
+
+  const updatedProfiles = STATE.profiles.filter(p => p.id !== profileId);
+  if (STATE.activeProfileId === profileId) {
+    STATE.activeProfileId = updatedProfiles.length > 0 ? updatedProfiles[0].id : null;
+  }
+  await saveProfilesToDiskAndIDB(updatedProfiles);
+  showAlert(`Removed profile "${profile.name}". Stories were preserved!`, 'ℹ️');
+  await renderDadPostsTable();
+}
+
+async function checkAndPromptFirstRun() {
+  if (STATE.profiles.length === 0) {
+    const setupDialog = document.getElementById('profile-setup-dialog');
+    if (setupDialog) setupDialog.showModal();
+  }
+}
+
+document.getElementById('first-run-profile-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nameInput = document.getElementById('setup-kid-name');
+  const emojiSelect = document.getElementById('setup-kid-emoji');
+  const colorInput = document.getElementById('setup-kid-color');
+
+  const name = nameInput.value.trim();
+  if (!name) return;
+
+  const firstProfile = {
+    id: 'profile_' + Date.now(),
+    name: name,
+    slug: slugify(name),
+    emoji: emojiSelect.value || '⭐',
+    color: colorInput.value || '#FD79A8'
+  };
+
+  await saveProfilesToDiskAndIDB([firstProfile]);
+  await setActiveProfile(firstProfile.id);
+
+  document.getElementById('profile-setup-dialog')?.close();
+  showAlert(`Welcome, ${name}! Your Story Desk is ready!`, '🎨');
+  startNewPost();
+});
+
+// ============================================================================
+// 11. Parent Area (Dad Gate & Admin Dashboard)
 // ============================================================================
 
 const dadLoginBtn = document.getElementById('btn-dad-login');
@@ -1029,6 +1311,7 @@ dadGateForm.addEventListener('submit', (e) => {
 
 async function openDadAdmin() {
   updateDadFolderStatus();
+  renderDadProfilesList();
   await renderDadPostsTable();
   dadAdminDialog.showModal();
 }
@@ -1504,6 +1787,23 @@ function escapeHtml(str) {
 
 window.addEventListener('DOMContentLoaded', async () => {
   initCanvas();
+
+  // Load profiles from disk or IndexedDB
+  const loadedProfiles = await loadProfilesFromDiskOrIDB();
+  STATE.profiles = loadedProfiles;
+
+  const cachedActiveId = await idbGet('settings', 'active_profile_id');
+  if (cachedActiveId && STATE.profiles.some(p => p.id === cachedActiveId)) {
+    STATE.activeProfileId = cachedActiveId;
+  } else if (STATE.profiles.length > 0) {
+    STATE.activeProfileId = STATE.profiles[0].id;
+  }
+  STATE.currentAuthorId = STATE.activeProfileId;
+
+  renderProfileDropdown();
+
+  // Check if first-run setup is required
+  await checkAndPromptFirstRun();
 
   // Try to recover any active draft
   const hasDraft = await loadDraftFromIDB();
