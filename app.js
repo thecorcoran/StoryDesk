@@ -1066,12 +1066,24 @@ function startNewPost() {
   showAlert('Fresh new page ready for your imagination!', '✨');
 }
 
-// Dialog Close helper
-document.querySelectorAll('[data-close]').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const dialogId = btn.getAttribute('data-close');
-    document.getElementById(dialogId).close();
-  });
+// Delegated Dialog Close helper
+document.addEventListener('click', (e) => {
+  const closeBtn = e.target.closest('[data-close]');
+  if (closeBtn) {
+    const dialogId = closeBtn.getAttribute('data-close');
+    const dlg = document.getElementById(dialogId);
+    if (dlg) {
+      if (typeof dlg.close === 'function') {
+        try {
+          dlg.close();
+        } catch (_) {
+          dlg.removeAttribute('open');
+        }
+      } else {
+        dlg.removeAttribute('open');
+      }
+    }
+  }
 });
 
 function slugify(text) {
@@ -1324,7 +1336,18 @@ async function handleRemoveProfile(profileId) {
 async function checkAndPromptFirstRun() {
   if (STATE.profiles.length === 0) {
     const setupDialog = document.getElementById('profile-setup-dialog');
-    if (setupDialog) setupDialog.showModal();
+    if (setupDialog && !setupDialog.open) {
+      try {
+        if (typeof setupDialog.showModal === 'function') {
+          setupDialog.showModal();
+        } else {
+          setupDialog.setAttribute('open', '');
+        }
+      } catch (err) {
+        console.warn('First-run dialog modal fallback:', err);
+        setupDialog.setAttribute('open', '');
+      }
+    }
   }
 }
 
@@ -1388,30 +1411,100 @@ const dadGateForm = document.getElementById('dad-gate-form');
 const dadPasscodeInput = document.getElementById('dad-passcode');
 const dadGateError = document.getElementById('dad-gate-error');
 
-dadLoginBtn.addEventListener('click', () => {
-  dadPasscodeInput.value = '';
-  dadGateError.classList.add('hidden');
-  dadGateDialog.showModal();
-  dadPasscodeInput.focus();
+dadLoginBtn?.addEventListener('click', (e) => {
+  e.preventDefault();
+
+  // Close any potentially open modal dialogs that might be capturing top layer / clicks
+  ['profile-setup-dialog', 'gallery-dialog', 'kid-blog-dialog'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.open) {
+      try { el.close(); } catch (_) { el.removeAttribute('open'); }
+    }
+  });
+
+  if (dadGateDialog) {
+    if (dadGateDialog.open) {
+      try { dadGateDialog.close(); } catch (_) { dadGateDialog.removeAttribute('open'); }
+    }
+    dadPasscodeInput.value = '';
+    dadGateError.classList.add('hidden');
+    try {
+      if (typeof dadGateDialog.showModal === 'function') {
+        dadGateDialog.showModal();
+      } else {
+        dadGateDialog.setAttribute('open', '');
+      }
+    } catch (err) {
+      console.warn('showModal fallback:', err);
+      dadGateDialog.setAttribute('open', '');
+    }
+    dadPasscodeInput.focus();
+  }
 });
 
-dadGateForm.addEventListener('submit', (e) => {
+dadGateForm?.addEventListener('submit', (e) => {
   e.preventDefault();
   const val = dadPasscodeInput.value.trim().toLowerCase();
   if (val === STATE.parentPasscode || val === 'story' || val === 'admin') {
-    dadGateDialog.close();
+    try { dadGateDialog.close(); } catch (_) { dadGateDialog.removeAttribute('open'); }
     openDadAdmin();
   } else {
     dadGateError.classList.remove('hidden');
   }
 });
 
+async function updateDadFolderStatus() {
+  const statusEl = document.getElementById('folder-status-text');
+  if (!statusEl) return;
+  const dir = await getStoredDirectoryHandle();
+  if (dir) {
+    statusEl.textContent = `Active folder: "${dir.name}" on this computer.`;
+  } else {
+    statusEl.textContent = 'Using browser IndexedDB. Click below to connect a folder on this computer!';
+  }
+}
+
+document.getElementById('btn-pick-folder')?.addEventListener('click', async () => {
+  await chooseStorageDirectory();
+});
+
 async function openDadAdmin() {
-  updateDadFolderStatus();
-  renderDadProfilesList();
-  await updateUnassignedStoriesUI();
-  await renderDadPostsTable();
-  dadAdminDialog.showModal();
+  try {
+    await updateDadFolderStatus();
+  } catch (e) {
+    console.warn('Folder status update error:', e);
+  }
+  try {
+    renderDadProfilesList();
+  } catch (e) {
+    console.warn('Render profiles error:', e);
+  }
+  try {
+    await updateUnassignedStoriesUI();
+  } catch (e) {
+    console.warn('Unassigned stories UI error:', e);
+  }
+  try {
+    await renderDadPostsTable();
+  } catch (e) {
+    console.warn('Posts table error:', e);
+  }
+
+  if (dadAdminDialog) {
+    if (dadAdminDialog.open) {
+      try { dadAdminDialog.close(); } catch (_) { dadAdminDialog.removeAttribute('open'); }
+    }
+    try {
+      if (typeof dadAdminDialog.showModal === 'function') {
+        dadAdminDialog.showModal();
+      } else {
+        dadAdminDialog.setAttribute('open', '');
+      }
+    } catch (err) {
+      console.warn('showModal fallback for dadAdminDialog:', err);
+      dadAdminDialog.setAttribute('open', '');
+    }
+  }
 }
 
 async function updateUnassignedStoriesUI() {

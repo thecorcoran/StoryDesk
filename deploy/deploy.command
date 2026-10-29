@@ -4,3 +4,4 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 "$DIR/deploy.sh"
 echo ""
 read -p "Press Enter to exit..."
+

@@ -570,6 +570,10 @@ canvas#paint-canvas {
 }
 
 /* Dialogs */
+dialog:not([open]) {
+  display: none !important;
+}
+
 .kid-dialog {
   margin: auto;
   border: none;
@@ -580,6 +584,8 @@ canvas#paint-canvas {
   width: 90vw;
   max-height: 85vh;
   overflow: hidden;
+  background-color: #FFFFFF;
+  color: var(--text-main);
 }
 
 .kid-dialog::backdrop {
@@ -593,6 +599,8 @@ canvas#paint-canvas {
   flex-direction: column;
   max-height: 85vh;
   overflow-y: auto;
+  background-color: #FFFFFF;
+  color: var(--text-main);
 }
 
 .dialog-header {
@@ -690,6 +698,7 @@ canvas#paint-canvas {
 /* Parent Area Specifics */
 .gate-card {
   max-width: 450px;
+  background-color: #FFFFFF;
 }
 
 .gate-prompt {
