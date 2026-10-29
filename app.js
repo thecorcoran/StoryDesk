@@ -151,16 +151,18 @@ document.getElementById('btn-alert-close').addEventListener('click', () => {
 function markDirty() {
   STATE.isDirty = true;
   const status = document.getElementById('autosave-status');
-  status.classList.add('dirty');
-  document.getElementById('autosave-text').textContent = 'Unsaved changes';
+  if (status) status.classList.add('dirty');
+  const textEl = document.getElementById('autosave-text');
+  if (textEl) textEl.textContent = 'Saving...';
   scheduleAutosave();
 }
 
 function markSaved() {
   STATE.isDirty = false;
   const status = document.getElementById('autosave-status');
-  status.classList.remove('dirty');
-  document.getElementById('autosave-text').textContent = 'Saved!';
+  if (status) status.classList.remove('dirty');
+  const textEl = document.getElementById('autosave-text');
+  if (textEl) textEl.textContent = 'Saved!';
 }
 
 // ============================================================================
