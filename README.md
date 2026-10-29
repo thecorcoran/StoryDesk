@@ -1,10 +1,13 @@
 # Story Desk 🎨📖🎙️
 
-An installable, offline-capable Progressive Web App (PWA) designed for an 8-year-old child to draw pictures, write stories, and record voice narrations.
+An installable, offline-capable Progressive Web App (PWA) designed for children to draw pictures, write stories, and record voice narrations.
 
-- **Zero dependencies**: Pure HTML, CSS, and vanilla JavaScript.
-- **No external network calls**: No CDNs, no web fonts, no analytics, no trackers.
+- **Zero dependencies**: Pure HTML, CSS, and vanilla JavaScript. No build step or frameworks.
+- **No external network calls**: No CDNs, no remote fonts, no analytics, no trackers.
 - **Privacy by design**: All stories, pictures, and voice recordings remain on the computer. Nothing is ever uploaded by the application.
+- **Multiple Kid Profiles**: Switch between children with a single click. Each child gets their own stories and blog space.
+- **In-App "See My Blog"**: Children can preview their published stories and listen to recordings in a read-only viewer.
+- **One-Click Publish & Deploy**: Dad can build the family static blog with one click and deploy to Cloudflare Pages protected by Zero Trust email PINs.
 
 ---
 
@@ -12,7 +15,7 @@ An installable, offline-capable Progressive Web App (PWA) designed for an 8-year
 
 Because the app is a PWA that uses Service Workers and the File System Access API, it must be accessed over `localhost` or HTTPS.
 
-You can serve this folder with any local web server:
+You can serve this repository with any local web server:
 
 ```bash
 # Using Python 3:
@@ -29,76 +32,123 @@ http://localhost:8000
 
 ---
 
-## 2. Installing the PWA for Your Daughter
+## 2. Installing the PWA on a Laptop
 
-1. Open the app in **Chrome** or **Edge** on her laptop.
-2. In the browser address bar, click the **Install** button (computer icon with down arrow) or go to the browser menu (**⋮**) → **Save and share** → **Install Story Desk**.
-3. Story Desk will now appear as its own desktop app icon with a standalone window and will work completely offline even when disconnected from Wi-Fi.
+1. Open the app in **Google Chrome** or **Microsoft Edge** on your child's laptop.
+2. In the browser address bar, click the **Install** button (computer icon with down arrow) or go to browser menu (**⋮**) → **Save and share** → **Install Story Desk**.
+3. Story Desk will now appear as its own desktop app icon with a standalone window and will work completely offline even when disconnected from the internet.
 
 ---
 
-## 3. How Story Storage Works
+## 3. Multiple Kid Profiles & "Who's Writing?"
+
+Story Desk supports multiple young authors on the same computer:
+
+- **"Who's writing?" Dropdown**: Visible in the top header. Switching children filters the story gallery and tags newly saved stories with that child's profile.
+- **Dad Profiles Manager**: Open **🔒 Dad** settings (passcode: `dad`) to add new children (name, custom emoji, and theme color), rename children, or remove profiles.
+- **Safe Story Retention**: Removing a profile **never** deletes stories; stories simply move to an unassigned state that Dad can reassign at any time.
+- **Profile Storage**: Profiles are stored in `profiles.json` at the root of the chosen stories folder (or in IndexedDB in fallback mode), and the active profile is remembered across launches.
+
+---
+
+## 4. How Story Storage Works
 
 ### Primary Mode: File System Access API
-On first run (or when clicking **Save!**), the app asks to pick a directory on her computer (for example: `C:\Users\<Name>\Documents\My Stories` or `/home/<user>/Documents/Stories`).
+On first run (or when clicking **Save!**), the app asks to pick a directory on your computer (for example: `C:\Users\<Name>\Documents\My Stories` or `/home/<user>/Documents/Stories`).
 
-- The browser securely remembers this directory handle inside IndexedDB.
-- Each time she saves a story, it writes a dedicated subfolder formatted as:
-  ```
-  2026-10-28_dragon-adventure/
-    ├── post.json          (Story title, date, text, and metadata)
-    ├── drawing.png        (High-resolution drawing canvas output)
-    ├── audio-1.webm       (Voice take 1 in Opus/WebM)
-    └── audio-2.webm       (Optional extra voice takes)
-  ```
+The browser securely remembers this directory handle inside IndexedDB. Stories are saved with the following structure:
+
+```
+Stories/
+  ├── maya/
+  │   └── 2026-10-28_dragon-adventure/
+  │       ├── post.json          (Story title, author ID, date, text, and metadata)
+  │       ├── drawing.png        (High-resolution drawing canvas output)
+  │       ├── audio-1.webm       (Voice take 1 in Opus/WebM)
+  │       └── audio-2.webm       (Optional extra voice takes)
+  └── leo/
+      └── 2026-10-29_space-rocket/
+          ├── post.json
+          ├── drawing.png
+          └── audio-1.webm
+site/                            (Generated family static blog)
+profiles.json                    (Kid profiles list)
+```
+
+#### Backward Compatibility
+Older stories saved without a kid subfolder or without an `author` field are read in place automatically. On first run, Dad can assign older stories to any profile with one click.
 
 ### Fallback Mode (IndexedDB)
 If the browser does not support the File System Access API, the app automatically persists all drawings, text, and voice recordings in IndexedDB using `navigator.storage.persist()`. Her work is completely safe, and you can export everything at any time via the **Export Everything as .ZIP** button in the Dad menu.
 
 ---
 
-## 4. Parent Area & Dad Settings
+## 5. Kid View: "See My Blog" 🌟
 
-Behind the **🔒 Dad** button in the top navigation bar lies the parent dashboard:
-- **Passcode Gate**: Enter the secret word: `dad` (or `story`). You can modify this in `app.js` under `STATE.parentPasscode`.
-- **Review Stories**: View her posts and toggle their status (**Draft Only** vs. **Published**).
-- **Make Blog Site Files**: Generates a self-contained static site bundle containing all stories marked as "Published" and prompts a `.zip` download.
+Next to "My Stories", children can click **🌟 See My Blog**:
+- Opens a full-screen, read-only preview of her published stories with her name and emoji at the top.
+- Displays stories newest first with drawing, text, and voice playback controls.
+- Drafts stay in her normal story list; only stories approved by Dad appear here.
+- 100% offline, zero network requests, read-only with a large "← Back to Desk" button.
 
 ---
 
-## 5. Deploying the Private Blog to Cloudflare Pages & Access
+## 6. One-Click Publish & Cloudflare Pages Deployment
 
-The Story Desk desk app is hosted on your GitHub Pages repo for installation, but the generated family blog is a separate, private site.
+Story Desk builds a completely static, lightweight family blog with zero external dependencies, responsive styles, and robots.txt disallowing search engines.
 
-### Step A: Generate the Site Files
-1. In Story Desk, click **🔒 Dad**, enter the secret word, and ensure the stories you want to share are marked **Published**.
-2. Click **Make Blog Site Files**.
-3. A file named `story-blog-site-YYYY-MM-DD.zip` will download. Extract this zip file into a folder on your computer.
+### Step 1: One-Time Cloudflare Setup
 
-### Step B: Deploy via Cloudflare Pages Direct Upload
-1. Log in to the [Cloudflare Dashboard](https://dash.cloudflare.com/).
-2. In the sidebar, select **Compute (Workers & Pages)** → **Pages**.
-3. Click **Create a project** → **Direct Upload**.
-4. Set a Project Name (e.g., `family-story-desk`) and click **Create project**.
-5. Drag and drop the extracted folder (containing `index.html`, `style.css`, and the story subfolders) into the Cloudflare upload box.
-6. Click **Deploy site**. Your static blog is now live at `https://family-story-desk.pages.dev`.
+#### A. Create your Cloudflare Pages Project
+1. Log in to [dash.cloudflare.com](https://dash.cloudflare.com/).
+2. In the sidebar, select **Compute (Workers & Pages)** → **Pages** → **Create a project** → **Direct Upload**.
+3. Name your project (e.g. `family-story-desk`) and choose production branch `main`.
 
-### Step C: Restrict Access with Cloudflare Zero Trust (Email One-Time PIN)
-To ensure only your family can read her blog:
-
-1. In the Cloudflare Dashboard, navigate to **Zero Trust**.
-2. Go to **Access** → **Applications** → click **Add an Application**.
-3. Choose **Self-hosted**.
-4. Configure application details:
-   - **Application name**: `Family Story Desk`
-   - **Application domain**: `family-story-desk.pages.dev` (or your custom domain)
-5. Click **Next** to configure Policies:
-   - **Policy Name**: `Family Access`
+#### B. Protect with Cloudflare Zero Trust (Email PIN)
+To ensure only family members can view your children's blog:
+1. In Cloudflare, navigate to **Zero Trust** → **Access** → **Applications** → **Add an Application**.
+2. Select **Self-hosted**.
+3. Set Application Details:
+   - **Application Name**: `Family Story Desk`
+   - **Application Domain**: `family-story-desk.pages.dev`
+   - **Add Additional Domain**: Add `*.family-story-desk.pages.dev` to protect preview domains.
+4. Set Access Policy:
+   - **Policy Name**: `Family Members`
    - **Action**: `Allow`
-   - **Configure rules**:
-     - **Selector**: `Emails`
-     - **Value**: Enter the email addresses of parents, grandparents, and family members.
-6. Click **Next** → save the application.
+   - **Rule Selector**: `Emails`
+   - **Value**: Enter the email addresses of parents, grandparents, and relatives.
+5. Save. Visitors will receive a 6-digit one-time passcode by email before viewing.
 
-Whenever anyone visits the site, Cloudflare will prompt for their email address and email them a single-use numeric code before granting access. The site remains 100% private.
+#### C. Configure Local Deploy Script
+In the `deploy/` folder of this repository:
+1. Copy `deploy/deploy.config.example` to `deploy/deploy.config`:
+   ```bash
+   cp deploy/deploy.config.example deploy/deploy.config
+   ```
+2. Edit `deploy.config`:
+   ```ini
+   PROJECT_NAME="family-story-desk"
+   SITE_DIR="/path/to/your/chosen/stories/folder/site"
+   BRANCH="main"
+   ```
+3. Authenticate Wrangler once on your computer:
+   ```bash
+   npx wrangler login
+   ```
 
+---
+
+### Step 2: Day-to-Day Publishing Workflow
+
+1. In Story Desk, click **🔒 Dad** and enter passcode `dad`.
+2. Review stories and mark the ones you want to share as **Published**.
+3. Click **🚀 Publish Family Site**. Story Desk instantly generates the static site into `site/` inside your chosen folder (or downloads a `.zip` in fallback mode).
+4. Deploy to the live site with one click:
+   - **macOS**: Double-click `deploy/deploy.command` (or run `./deploy/deploy.sh`)
+   - **Linux**: Run `./deploy/deploy.sh`
+   - **Windows**: Double-click `deploy/deploy.bat`
+
+The deploy script runs `npx wrangler pages deploy` against the `main` branch, updating your production blog without generating preview URLs, and outputs your live URL:
+```
+👉 https://family-story-desk.pages.dev
+```

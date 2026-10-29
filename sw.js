@@ -3,7 +3,7 @@
  * Ensures the web app is completely installable and works offline.
  */
 
-const CACHE_NAME = 'story-desk-v1';
+const CACHE_NAME = 'story-desk-v2';
 
 const ASSETS_TO_CACHE = [
   './',
