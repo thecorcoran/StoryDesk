@@ -2346,24 +2346,31 @@ async function openKidBlogView() {
           const aFile = await aHandle.getFile();
           const aUrl = URL.createObjectURL(aFile);
           STATE.blogBlobUrls.push(aUrl);
+          aInfo.url = aUrl;
           story.audios.push({
             filename: aInfo.filename,
             duration: aInfo.duration,
+            blob: aFile,
             url: aUrl
           });
         } catch (_) {}
       }
-    } else if (story.drawingBlob) {
-      const drawUrl = URL.createObjectURL(story.drawingBlob);
-      STATE.blogBlobUrls.push(drawUrl);
-      story.drawingUrl = drawUrl;
+    } else {
+      if (story.drawingBlob) {
+        const drawUrl = URL.createObjectURL(story.drawingBlob);
+        STATE.blogBlobUrls.push(drawUrl);
+        story.drawingUrl = drawUrl;
+      }
 
       if (story.audios && Array.isArray(story.audios)) {
-        story.audios.forEach(a => {
+        story.audios.forEach((a, idx) => {
           if (a.blob) {
             const aUrl = URL.createObjectURL(a.blob);
             STATE.blogBlobUrls.push(aUrl);
             a.url = aUrl;
+          }
+          if (story.audioFiles && story.audioFiles[idx]) {
+            story.audioFiles[idx].url = a.url;
           }
         });
       }
@@ -2431,7 +2438,7 @@ function renderKidBlogGrid(stories, activeKid) {
   kidBlogBody.appendChild(grid);
 }
 
-function renderKidBlogStoryDetail(story, allStories, activeKid) {
+async function renderKidBlogStoryDetail(story, allStories, activeKid) {
   if (!kidBlogBody) return;
   kidBlogBody.innerHTML = '';
 
@@ -2460,6 +2467,21 @@ function renderKidBlogStoryDetail(story, allStories, activeKid) {
     year: 'numeric'
   });
 
+  // Ensure drawing image has URL if available
+  if (!story.drawingUrl && story.dirHandle) {
+    try {
+      const drawH = await story.dirHandle.getFileHandle('drawing.png');
+      const drawF = await drawH.getFile();
+      const drawUrl = URL.createObjectURL(drawF);
+      STATE.blogBlobUrls.push(drawUrl);
+      story.drawingUrl = drawUrl;
+    } catch (_) {}
+  } else if (!story.drawingUrl && story.drawingBlob) {
+    const drawUrl = URL.createObjectURL(story.drawingBlob);
+    STATE.blogBlobUrls.push(drawUrl);
+    story.drawingUrl = drawUrl;
+  }
+
   const heroImg = document.createElement('img');
   heroImg.className = 'blog-story-hero-img';
   heroImg.alt = `Drawing for ${story.title}`;
@@ -2475,8 +2497,11 @@ function renderKidBlogStoryDetail(story, allStories, activeKid) {
   article.appendChild(heroImg);
   article.appendChild(body);
 
-  // Audio Recordings
-  const audioList = story.audioFiles || (story.audios ? story.audios : []);
+  // Audio Recordings: prefer story.audios (with blobs/urls) or fallback to story.audioFiles
+  const audioList = (story.audios && story.audios.length > 0)
+    ? story.audios
+    : (story.audioFiles || []);
+
   if (audioList.length > 0) {
     const audioSec = document.createElement('section');
     audioSec.className = 'blog-audio-section';
@@ -2485,22 +2510,41 @@ function renderKidBlogStoryDetail(story, allStories, activeKid) {
     audioH.textContent = '🎙️ Voice Recordings';
     audioSec.appendChild(audioH);
 
-    audioList.forEach((af, idx) => {
+    for (let idx = 0; idx < audioList.length; idx++) {
+      const af = audioList[idx];
       const row = document.createElement('div');
       row.className = 'blog-audio-player-row';
 
+      const durationText = af.duration ? ` (${af.duration})` : '';
       const label = document.createElement('strong');
-      label.textContent = `Take ${idx + 1}:`;
+      label.textContent = `Take ${idx + 1}${durationText}:`;
+
+      let audioUrl = af.url;
+      if (!audioUrl && af.blob) {
+        audioUrl = URL.createObjectURL(af.blob);
+        STATE.blogBlobUrls.push(audioUrl);
+        af.url = audioUrl;
+      } else if (!audioUrl && story.dirHandle && af.filename) {
+        try {
+          const aHandle = await story.dirHandle.getFileHandle(af.filename);
+          const aFile = await aHandle.getFile();
+          audioUrl = URL.createObjectURL(aFile);
+          STATE.blogBlobUrls.push(audioUrl);
+          af.url = audioUrl;
+        } catch (e) {
+          console.warn('Could not load audio take:', af.filename, e);
+        }
+      }
 
       const audio = document.createElement('audio');
       audio.controls = true;
-      audio.src = af.url || '';
+      audio.src = audioUrl || '';
       audio.preload = 'metadata';
 
       row.appendChild(label);
       row.appendChild(audio);
       audioSec.appendChild(row);
-    });
+    }
 
     article.appendChild(audioSec);
   }
